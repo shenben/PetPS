@@ -63,7 +63,7 @@ make -j && \
 make install
 
 # fmt
-RUN cd /tmp && git clone https://github.com/fmtlib/fmt.git && cd fmt && \ 
+RUN cd /tmp && git clone https://github.com/fmtlib/fmt.git && cd fmt && git checkout a34a97cc1d7d50ed6 &&  \ 
 mkdir _build && cd _build && cmake .. && make -j$(nproc) && \ 
 make install
 
