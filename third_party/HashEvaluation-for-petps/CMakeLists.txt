@@ -1,5 +1,8 @@
 project(PMHashEvaluation)
 
+# Set PMDK library directory (same as in dash/CMakeLists.txt)
+set(PMDK_LIB_DIR "${CMAKE_SOURCE_DIR}/third_party/dash/third_party/pmdk/src/PMDK/src/nondebug")
+
 FILE(GLOB ALL_SOURCES "${PROJECT_SOURCE_DIR}/hash/common/*.cpp")
 FILE(GLOB ALL_INCLUDES "${PROJECT_SOURCE_DIR}/hash/common/*.h")
 
@@ -21,7 +24,7 @@ target_include_directories(PMHashPCLHT PRIVATE
         ${PROJECT_SOURCE_DIR}/dash/src/
         ${PROJECT_SOURCE_DIR}/common/
         ${PROJECT_SOURCE_DIR}/hash/PCLHT)
-target_link_libraries(PMHashPCLHT PUBLIC vmem pmemobj pthread dash_hash)
+target_link_libraries(PMHashPCLHT PUBLIC ${PMDK_LIB_DIR}/libvmem.a ${PMDK_LIB_DIR}/libpmemobj.a ${PMDK_LIB_DIR}/libpmem.a ndctl daxctl pthread dash_hash)
 # target_link_libraries(PMHashPCLHT PUBLIC vmem pmemobj pthread)
 
 
@@ -44,7 +47,7 @@ target_include_directories(PMHashLevel PRIVATE
         ${PROJECT_SOURCE_DIR}/hash/common
         ${PROJECT_SOURCE_DIR}/dash/src/
         )
-target_link_libraries(PMHashLevel PUBLIC vmem pmemobj pthread dash_hash)
+target_link_libraries(PMHashLevel PUBLIC ${PMDK_LIB_DIR}/libvmem.a ${PMDK_LIB_DIR}/libpmemobj.a ${PMDK_LIB_DIR}/libpmem.a ndctl daxctl pthread dash_hash)
 
 
 add_library(
@@ -58,8 +61,9 @@ target_include_directories(PMHashClevel PRIVATE
         ${PROJECT_SOURCE_DIR}/hash/common
         ${PROJECT_SOURCE_DIR}/hash/Clevel/
         ${PROJECT_SOURCE_DIR}/hash/Clevel/test/
-        /usr/local/include/valgrind)
-target_link_libraries(PMHashClevel PUBLIC vmem pmemobj pthread)
+        /usr/local/include/valgrind
+        ${CMAKE_SOURCE_DIR}/third_party/dash/third_party/pmdk/src/PMDK/src/include)
+target_link_libraries(PMHashClevel PUBLIC ${PMDK_LIB_DIR}/libvmem.a ${PMDK_LIB_DIR}/libpmemobj.a ${PMDK_LIB_DIR}/libpmem.a ndctl daxctl pthread)
 
 
 # set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++17 -Wno-sign-compare  -Wno-unused-variable -Wno-unused-but-set-variable -Wno-maybe-uninitialized -Wno-mismatched-new-delete -fPIC ")
@@ -91,4 +95,4 @@ target_include_directories(PMHashCCEHVM PRIVATE
         ${PROJECT_SOURCE_DIR}/dash/src/
         ${PROJECT_SOURCE_DIR}/common/
         )
-target_link_libraries(PMHashCCEHVM PUBLIC vmem pmemobj pthread dash_hash)
+target_link_libraries(PMHashCCEHVM PUBLIC ${PMDK_LIB_DIR}/libvmem.a ${PMDK_LIB_DIR}/libpmemobj.a ${PMDK_LIB_DIR}/libpmem.a ndctl daxctl pthread dash_hash)

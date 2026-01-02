@@ -18,12 +18,14 @@ target_compile_options(PiBenchPetHash PRIVATE -Wno-error=class-memaccess)
 add_library(PiBenchDash SHARED ${PROJECT_SOURCE_DIR}/src/kv_engine/PiBenchWrapperDash.cc)
 target_link_libraries(PiBenchDash PRIVATE dash_hash base)
 
-add_custom_command(
-  TARGET PiBenchPetHash
-  POST_BUILD
-  COMMAND cp "$<TARGET_FILE:PiBenchPetHash>" "/home/xieminhui/HashEvaluation/bin/")
+# Optional: Copy libraries to HashEvaluation bin directory if it exists
+# Uncomment and modify the path below if needed for your setup
+# add_custom_command(
+#   TARGET PiBenchPetHash
+#   POST_BUILD
+#   COMMAND sh -c "mkdir -p \"$ENV{HOME}/HashEvaluation/bin\" && cp \"$<TARGET_FILE:PiBenchPetHash>\" \"$ENV{HOME}/HashEvaluation/bin/\" || true")
 
-add_custom_command(
-  TARGET PiBenchDash
-  POST_BUILD
-  COMMAND cp "$<TARGET_FILE:PiBenchDash>" "/home/xieminhui/HashEvaluation/bin/")
+# add_custom_command(
+#   TARGET PiBenchDash
+#   POST_BUILD
+#   COMMAND sh -c "mkdir -p \"$ENV{HOME}/HashEvaluation/bin\" && cp \"$<TARGET_FILE:PiBenchDash>\" \"$ENV{HOME}/HashEvaluation/bin/\" || true")

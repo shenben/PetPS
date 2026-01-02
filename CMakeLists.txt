@@ -1,21 +1,27 @@
-project(petps)
 cmake_minimum_required(VERSION 3.8)
 
-set(CMAKE_C_COMPILER "/usr/bin/gcc-9")
-set(CMAKE_CXX_COMPILER "/usr/bin/g++-9")
+# Set compiler before project() to avoid CMake reconfiguration loops
+set(CMAKE_C_COMPILER "/usr/bin/gcc-9" CACHE FILEPATH "C compiler" FORCE)
+set(CMAKE_CXX_COMPILER "/usr/bin/g++-9" CACHE FILEPATH "C++ compiler" FORCE)
+
+project(petps)
+
 set(CMAKE_VERBOSE_MAKEFILE ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 
 # Please modify the following path to your installed path.
-set(folly_DIR "/home/xieminhui/folly-install/usr/local/lib/cmake/folly")
-set(FOLLY_ROOT_DIR "/home/xieminhui/folly-install")
-set(TBB_DIR "/home/xieminhui/intel/oneapi/tbb/latest/lib/cmake/tbb")
+set(folly_DIR "$ENV{HOME}/folly-install/usr/local/lib/cmake/folly")
+set(FOLLY_ROOT_DIR "$ENV{HOME}/folly-install")
+set(TBB_DIR "$ENV{HOME}/intel/oneapi/tbb/latest/lib/cmake/tbb")
 
 find_package(folly REQUIRED)
 find_package(glog CONFIG REQUIRED)
 find_package(OpenMP)
-find_package(TBB REQUIRED)
+find_package(TBB)
+if(NOT TBB_FOUND)
+    message(WARNING "TBB not found, continuing without it")
+endif()
 
 include(FetchContent)
 FetchContent_Declare(

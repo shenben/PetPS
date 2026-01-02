@@ -31,6 +31,7 @@ sudo apt remove libgoogle-glog-dev
 cd ~
 rm -rf fmt
 git clone https://github.com/fmtlib/fmt.git && cd fmt
+git checkout 9.1.0
 mkdir _build && cd _build
 CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' cmake ..
 make -j$(nproc)
@@ -39,7 +40,7 @@ cd -
 
 
 # glog
-sudo apt remove -y glog
+# sudo apt remove -y glog
 cd ~
 git clone https://github.com/google/glog
 cd glog

@@ -15,7 +15,7 @@
 
 #include "Debug.h"
 
-// #define OFED_VERSION_5
+#define OFED_VERSION_5
 
 #define MAX_POST_LIST 32
 #define DCT_ACCESS_KEY 3185
