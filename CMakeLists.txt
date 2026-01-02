@@ -13,10 +13,18 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Please modify the following path to your installed path.
 set(folly_DIR "$ENV{HOME}/folly-install/usr/local/lib/cmake/folly")
 set(FOLLY_ROOT_DIR "$ENV{HOME}/folly-install")
-set(TBB_DIR "$ENV{HOME}/intel/oneapi/tbb/latest/lib/cmake/tbb")
+# Use Intel oneAPI TBB
+set(TBB_DIR "/opt/intel/oneapi/tbb/2021.8.0/lib/cmake/tbb")
+
+# Use Boost 1.62 from /usr/local that folly was built against
+set(BOOST_ROOT "/usr/local")
+set(BOOST_INCLUDEDIR "/usr/local/include")
+set(BOOST_LIBRARYDIR "/usr/local/lib")
+set(Boost_NO_SYSTEM_PATHS ON)
 
 find_package(folly REQUIRED)
 find_package(glog CONFIG REQUIRED)
+find_package(Boost REQUIRED COMPONENTS context filesystem program_options regex system thread)
 find_package(OpenMP)
 find_package(TBB)
 if(NOT TBB_FOUND)
