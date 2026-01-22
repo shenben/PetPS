@@ -8,22 +8,26 @@ from bench_base import *
 import concurrent.futures
 
 ALL_SERVERS_INCLUDING_NOT_USED = [
+    # PS1
+    '10.113.164.246',
+    # PS2
+    '10.113.164.247',
     # client
-    '10.0.2.110',
-    # PS
-    '10.0.2.130',
+    '10.113.164.246',
 ]
 # Each element has the format (IP, NUMA_ID)
 SINGLE_PS_SERVERS = [
-    ('10.0.2.130', 0),
+    ('10.113.164.246', 0),
+    ('10.113.164.247', 0),
 ]
 SINGLE_CLIENT_SERVERS = [
-    ('10.0.2.110', 0),
+    ('10.113.164.246', 0),
 ]
 
 PRELOAD_WHEN_INIT = False
 SERVER_THREAD_NUM = 18
 WARM_UP_RATIO = 0.8
+SKIP_PMEM_INIT = True  # Skip PMem init since it's already initialized
 
 
 def ConvertHostNumaList2Host(host_numa_lists):
@@ -32,6 +36,10 @@ def ConvertHostNumaList2Host(host_numa_lists):
 
 
 def InitPMToFsDax(hosts,):
+    if SKIP_PMEM_INIT:
+        print("Skipping PMem init (already initialized)")
+        return
+
     if type(hosts) is not list:
         hosts = [hosts]
 
@@ -283,25 +291,14 @@ class ExpEnd2End(ParameterServerExperiment):
             "binding": [
                 {
                     "db": ["KVEnginePetKV"],
-                    "use_sglist": ['false', 'true'],
+                    "use_sglist": ['true'],
                 },
                 {
                     "db": [
-                        # "KVEnginePersistShmKV",
                         "KVEngineMap",
-                        "KVEngineDash",
-                        "KVEngineLevel",
-                        # "KVEngineClevel",
-                        "KVEngineCCEHVM",
-                        "KVEngineMapPM",
                     ],
                     "use_sglist": ['false'],
                 },
-                # {
-                #     "db": ["KVEngineF14"],
-                #     "use_sglist": ['true', 'false', ],
-                #     "warmup_thread_num": [1],
-                # },
             ],
             "preload": ["false" if PRELOAD_WHEN_INIT else "true"],
             "thread_num": [SERVER_THREAD_NUM],
@@ -364,7 +361,7 @@ class ExpDRAM(ParameterServerExperiment):
                 {
                     "db": ["KVEnginePersistShmKV"],
                     "use_sglist": ['false', ],
-                    "use_dram": ['true', ],
+                    "use_dram": ['false', ],
                 },
             ],
             "preload": ["false" if PRELOAD_WHEN_INIT else "true"],

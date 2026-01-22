@@ -26,11 +26,12 @@ sudo apt-get install \
     pkg-config \
     libunwind-dev
 
-sudo apt remove libgoogle-glog-dev
+sudo apt remove -y libgoogle-glog-dev
 
 cd ~
 rm -rf fmt
-git clone https://github.com/fmtlib/fmt.git && cd fmt
+git clone https://github.com/fmtlib/fmt.git && 
+cd fmt
 git checkout 9.1.0
 mkdir _build && cd _build
 CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' cmake ..

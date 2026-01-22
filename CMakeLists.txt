@@ -16,11 +16,11 @@ set(FOLLY_ROOT_DIR "$ENV{HOME}/folly-install")
 # Use Intel oneAPI TBB
 set(TBB_DIR "/opt/intel/oneapi/tbb/2021.8.0/lib/cmake/tbb")
 
-# Use Boost 1.62 from /usr/local that folly was built against
-set(BOOST_ROOT "/usr/local")
-set(BOOST_INCLUDEDIR "/usr/local/include")
-set(BOOST_LIBRARYDIR "/usr/local/lib")
-set(Boost_NO_SYSTEM_PATHS ON)
+# Use system Boost 1.74
+set(BOOST_ROOT "/usr")
+set(BOOST_INCLUDEDIR "/usr/include")
+set(BOOST_LIBRARYDIR "/usr/lib/x86_64-linux-gnu")
+set(Boost_NO_SYSTEM_PATHS OFF)
 
 find_package(folly REQUIRED)
 find_package(glog CONFIG REQUIRED)

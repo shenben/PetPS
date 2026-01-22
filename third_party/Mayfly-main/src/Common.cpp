@@ -63,9 +63,12 @@ char *getIP() {
   int fd = socket(AF_INET, SOCK_DGRAM, 0);
 
   ifr.ifr_addr.sa_family = AF_INET;
-  strncpy(ifr.ifr_name, "eno1", IFNAMSIZ - 1);
-
-  ioctl(fd, SIOCGIFADDR, &ifr);
+  // Use ibp202s0f0 for InfiniBand RDMA, fallback to other interfaces
+  strncpy(ifr.ifr_name, "ibp202s0f0", IFNAMSIZ - 1);
+  if (ioctl(fd, SIOCGIFADDR, &ifr) < 0) {
+    strncpy(ifr.ifr_name, "eno8303", IFNAMSIZ - 1);  // fallback
+    ioctl(fd, SIOCGIFADDR, &ifr);
+  }
   close(fd);
 
   return inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr);

@@ -13,7 +13,7 @@ from zmq import SERVER
 import concurrent.futures
 
 
-PROJECT_PATH = "/home/xieminhui/petps"
+PROJECT_PATH = "/home/pxg/PetPS"
 LOG_PREFIX = f'{PROJECT_PATH}/benchmark/log'
 
 #  sudo service  memcached stop
@@ -37,10 +37,11 @@ def mount_master(hosts):
     ParallelSSH(
         hosts, f"ls {PROJECT_PATH};")
 
-    ParallelSSH(
-        hosts, f"fusermount -u petps;")
-    ParallelSSH(
-        hosts, f"sudo mount 10.0.2.130:{PROJECT_PATH} petps")
+    # NFS mount disabled - using local binaries
+    # ParallelSSH(
+    #     hosts, f"fusermount -u petps;")
+    # ParallelSSH(
+    #     hosts, f"sudo mount 10.113.164.246:{PROJECT_PATH} petps")
 
 
 def config_each_server(hosts):
@@ -84,11 +85,9 @@ if __name__ == "__main__":
     # exp_lists.append(each)
 
     for i, each in enumerate(exp_lists):
-        # mount NFS
-        mount_master(
-            [each for each in ALL_SERVERS_INCLUDING_NOT_USED if each != '10.0.2.130'])
-        config_each_server(
-            [each for each in ALL_SERVERS_INCLUDING_NOT_USED if each != '10.0.2.130'])
+        # mount (create directories)
+        mount_master(ALL_SERVERS_INCLUDING_NOT_USED)
+        config_each_server(ALL_SERVERS_INCLUDING_NOT_USED)
 
         print("=================-====================")
         print(f"Experiment {i}/{len(exp_lists)}: ", each.name)
