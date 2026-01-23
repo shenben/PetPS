@@ -8,7 +8,7 @@ namespace base {
 bool ShmFile::InitializeFsDax(const std::string &filename, int64 size) {
   ClearFsDax();
   if (!fs::exists(filename)) {
-    fs::create_directory(fs::path(filename).parent_path());
+    fs::create_directories(fs::path(filename).parent_path());
     LOG(INFO) << "Create ShmFile: " << filename << ", size: " << size;
 
     system(folly::sformat("fallocate -l {} {}", size, filename).c_str());
@@ -46,7 +46,7 @@ bool ShmFile::InitializeDevDax(const std::string &filename, int64 size) {
   }
 
   if (!fs::exists(filename)) {
-    fs::create_directory(fs::path(filename).parent_path());
+    fs::create_directories(fs::path(filename).parent_path());
     LOG(INFO) << "Create ShmFile: " << filename << ", size: " << size;
     std::ofstream output(filename);
     output.write("a", 1);

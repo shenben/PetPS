@@ -18,14 +18,13 @@ public:
 };
 
 inline void clflushopt(void *addr) {
-  return;
   static int isClflushoptEnabled = !system("lscpu |grep clflushopt >/dev/null");
-  static int isClwbEnabled = !system("lscpu |grep clfw >/dev/null");
+  static int isClwbEnabled = !system("lscpu |grep clwb >/dev/null");
   static int isClflushEnabled = !system("lscpu |grep clflush >/dev/null");
   if (isClflushoptEnabled) {
     asm volatile(".byte 0x66; clflush %0" : "+m"(*(volatile char *)(addr)));
   } else if (isClwbEnabled) {
-    asm volatile(".byte 0x66; xsaveopt %0" : "+m"(*(volatile char *)(addr)));
+    asm volatile("clwb %0" : "+m"(*(volatile char *)(addr)));
   } else if (isClflushEnabled) {
     asm volatile("clflush %0" : "+m"(*(volatile char *)addr));
   } else {

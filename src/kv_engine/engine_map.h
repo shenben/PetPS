@@ -4,6 +4,7 @@
 #include "base_kv.h"
 
 #include "memory/persist_malloc.h"
+#include "pet_kv/persistence.h"
 
 #include <shared_mutex>
 #include <unordered_map>
@@ -59,6 +60,13 @@ public:
       int size = value_size_;
 #endif
       value = std::string(data, size);
+
+      // Debug: verify data integrity
+      float *emb = (float *)data;
+      if (size >= sizeof(float) && std::fabs(emb[0] - key) > 1e-6) {
+        LOG(ERROR) << "Data corruption for key " << key << ": expected " << key
+                   << ", got " << emb[0] << ", offset=" << shmkv_data.shm_malloc_offset();
+      }
     }
   }
 
@@ -69,9 +77,14 @@ public:
     char *sync_data = shm_malloc_.New(value.size());
     shmkv_data.SetShmMallocOffset(shm_malloc_.GetMallocOffset(sync_data));
     memcpy(sync_data, value.data(), value.size());
+    // Flush to persistent memory
+    base::clflushopt_range(sync_data, value.size());
 
     std::unique_lock<std::shared_mutex> _(lock_);
-    hash_table_->insert({key, shmkv_data.data_value});
+    auto result = hash_table_->insert({key, shmkv_data.data_value});
+    if (!result.second) {
+      LOG(ERROR) << "Key " << key << " already exists in hash table";
+    }
   }
 
   void BatchGet(base::ConstArray<uint64> keys,

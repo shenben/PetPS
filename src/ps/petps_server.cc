@@ -252,7 +252,8 @@ int main(int argc, char *argv[]) {
   xmh::Reporter::StartReportThread();
 
   BaseKVConfig config;
-  std::string path = folly::sformat("/media/aep{}/", FLAGS_numa_id);
+  // Include global_id in path to avoid storage conflicts between servers
+  std::string path = folly::sformat("/media/aep{}/server{}/", FLAGS_numa_id, XPostoffice::GetInstance()->GlobalID());
 
   if (FLAGS_use_dram)
     config.path = path + "dram-placeholder";

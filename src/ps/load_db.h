@@ -114,11 +114,13 @@ public:
     std::vector<std::thread> th(check_thread_num);
 
     std::atomic<uint64_t> inserted_kv_nr{0};
+    std::atomic<uint64_t> missing_kv_nr{0};
 
     for (int i = 0; i < check_thread_num; ++i) {
       th[i] = std::thread(
-          [this, i, warm_kv_per_thread, start, end, &inserted_kv_nr]() {
+          [this, i, warm_kv_per_thread, start, end, &inserted_kv_nr, &missing_kv_nr]() {
             size_t right = 0;
+            size_t missing = 0;
             for (int j = start + i * warm_kv_per_thread;
                  j < std::min(end, start + (i + 1) * warm_kv_per_thread); ++j) {
               if (i == 0) {
@@ -132,6 +134,10 @@ public:
                 continue;
               std::string value;
               kv_->Get(key, value, i);
+              if (value.empty()) {
+                missing++;
+                continue;
+              }
               float *emb = (float *)value.c_str();
               bool subright = true;
               for (int k = 0; k < FLAGS_value_size / sizeof(float); k++) {
@@ -145,6 +151,7 @@ public:
                 right += 1;
             }
             inserted_kv_nr += right;
+            missing_kv_nr += missing;
           });
     }
     for (int i = 0; i < check_thread_num; ++i) {
@@ -153,9 +160,9 @@ public:
 
     if (inserted_kv_nr != warmup_kv_count_in_this_ps_)
       LOG(ERROR) << folly::sformat(
-          "Only insert {}/{}={}%", inserted_kv_nr.load(),
+          "Only insert {}/{}={}%, missing={}", inserted_kv_nr.load(),
           warmup_kv_count_in_this_ps_,
-          inserted_kv_nr * 100 / warmup_kv_count_in_this_ps_);
+          inserted_kv_nr * 100 / warmup_kv_count_in_this_ps_, missing_kv_nr.load());
     else
       LOG(INFO) << "All warmed KVs inserted";
 

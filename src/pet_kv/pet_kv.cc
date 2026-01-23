@@ -14,7 +14,7 @@ namespace base {
 
 constexpr bool IGNORE_LOAD_FACTOR = true;
 
-PetKVData::Config PetKVData::kConfig = PetKVData::Config();
+PetKVData::Config PetKVData::kConfig = PetKVData::Config(48);  // Use 48-bit offset to support large PMem
 
 PetKV::PetKV(const std::string &shm_dir, int64 memory_size, int capacity,
              int pre_known_value_size)

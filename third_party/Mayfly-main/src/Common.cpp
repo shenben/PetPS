@@ -63,11 +63,15 @@ char *getIP() {
   int fd = socket(AF_INET, SOCK_DGRAM, 0);
 
   ifr.ifr_addr.sa_family = AF_INET;
-  // Use ibp202s0f0 for InfiniBand RDMA, fallback to other interfaces
-  strncpy(ifr.ifr_name, "ibp202s0f0", IFNAMSIZ - 1);
+  // Use enp202s0f1np1 for RoCE RDMA (10.10.2.x network)
+  // Fallback to ibp202s0f0 for InfiniBand (10.10.1.x network)
+  strncpy(ifr.ifr_name, "enp202s0f1np1", IFNAMSIZ - 1);
   if (ioctl(fd, SIOCGIFADDR, &ifr) < 0) {
-    strncpy(ifr.ifr_name, "eno8303", IFNAMSIZ - 1);  // fallback
-    ioctl(fd, SIOCGIFADDR, &ifr);
+    strncpy(ifr.ifr_name, "ibp202s0f0", IFNAMSIZ - 1);  // fallback to IB
+    if (ioctl(fd, SIOCGIFADDR, &ifr) < 0) {
+      strncpy(ifr.ifr_name, "eno8303", IFNAMSIZ - 1);  // fallback to ethernet
+      ioctl(fd, SIOCGIFADDR, &ifr);
+    }
   }
   close(fd);
 
