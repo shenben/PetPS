@@ -9,6 +9,7 @@
 
 // static const int hash_api_valid_file_size = 123;
 #define XMH_VARIABLE_SIZE_KV
+// Use the value from engine_hashapi.h
 
 class KVEngineMultiMapPM : public BaseKV {
   static constexpr int kShardNum = 32;
@@ -46,10 +47,10 @@ public:
     uint64_t value_shm_size = config.capacity * config.value_size;
 
     if (!valid_shm_file_.Initialize(config.path + "/valid",
-                                    hash_api_valid_file_size)) {
+                                    123)) {
       base::file_util::Delete(config.path + "/valid", false);
       CHECK(valid_shm_file_.Initialize(config.path + "/valid",
-                                       hash_api_valid_file_size));
+                                       123));
       shm_malloc_.Initialize();
     }
     LOG(INFO) << "After init: [shm_malloc] " << shm_malloc_.GetInfo();
