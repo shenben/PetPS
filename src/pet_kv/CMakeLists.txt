@@ -15,8 +15,10 @@ target_link_libraries(PiBenchPetHash PRIVATE base base_memory)
 target_compile_options(PiBenchPetHash PRIVATE -msse -msse2 -msse3 -msse4)
 target_compile_options(PiBenchPetHash PRIVATE -Wno-error=class-memaccess)
 
-add_library(PiBenchDash SHARED ${PROJECT_SOURCE_DIR}/src/kv_engine/PiBenchWrapperDash.cc)
-target_link_libraries(PiBenchDash PRIVATE dash_hash base)
+if(USE_PMEM)
+  add_library(PiBenchDash SHARED ${PROJECT_SOURCE_DIR}/src/kv_engine/PiBenchWrapperDash.cc)
+  target_link_libraries(PiBenchDash PRIVATE dash_hash base)
+endif()
 
 # Optional: Copy libraries to HashEvaluation bin directory if it exists
 # Uncomment and modify the path below if needed for your setup

@@ -1,5 +1,6 @@
 project(PMHashEvaluation)
 
+if(USE_PMEM)
 # Set PMDK library directory (same as in dash/CMakeLists.txt)
 set(PMDK_LIB_DIR "${CMAKE_SOURCE_DIR}/third_party/dash/third_party/pmdk/src/PMDK/src/nondebug")
 
@@ -68,7 +69,7 @@ target_link_libraries(PMHashClevel PUBLIC ${PMDK_LIB_DIR}/libvmem.a ${PMDK_LIB_D
 
 # set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=gnu++17 -Wno-sign-compare  -Wno-unused-variable -Wno-unused-but-set-variable -Wno-maybe-uninitialized -Wno-mismatched-new-delete -fPIC ")
 # add_library(
-# 	PMHashCCEHVM STATIC 
+# 	PMHashCCEHVM STATIC
 # ${DIR_SRCS}
 # ${PROJECT_SOURCE_DIR}/hash/CCEH/CCEH_MSB.cpp
 # )
@@ -96,3 +97,4 @@ target_include_directories(PMHashCCEHVM PRIVATE
         ${PROJECT_SOURCE_DIR}/common/
         )
 target_link_libraries(PMHashCCEHVM PUBLIC ${PMDK_LIB_DIR}/libvmem.a ${PMDK_LIB_DIR}/libpmemobj.a ${PMDK_LIB_DIR}/libpmem.a ndctl daxctl pthread dash_hash)
+endif()

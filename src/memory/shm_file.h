@@ -156,12 +156,14 @@ class PMMmapRegisterCenter {
       // filename_ = folly::sformat("/dev/shm/big_file{}", GetConfig().numa_id);
       fd_ = 0;
       LOG(WARNING) << "use dram mmap for PMMmapRegisterCenter";
+      // Don't use MAP_POPULATE - pages will be faulted in on demand
       data = reinterpret_cast<char *>(
           mmap(nullptr, dax_mm_size_, PROT_READ | PROT_WRITE,
-               MAP_PRIVATE | MAP_POPULATE | MAP_ANONYMOUS, -1, 0));
+               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
       metaBlock_ = (MetaBlock *)data;
       CHECK_NE(data, MAP_FAILED) << "map failed";
-      mlock(data, dax_mm_size_);
+      // Skip mlock for dram mode - it takes too long for large allocations
+      // mlock(data, dax_mm_size_);
       ReInitialize();
     } else {
       filename_ = folly::sformat("/dev/dax{}.0", GetConfig().numa_id);

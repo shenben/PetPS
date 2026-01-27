@@ -1,0 +1,13 @@
+# Target labels
+ Cityhash
+# Source files and their labels
+/home/pxg/PetPS/CMakeFiles/Cityhash
+/home/pxg/PetPS/CMakeFiles/Cityhash.rule
+/home/pxg/PetPS/CMakeFiles/Cityhash-complete.rule
+/home/pxg/PetPS/Cityhash-prefix/src/Cityhash-stamp/Cityhash-build.rule
+/home/pxg/PetPS/Cityhash-prefix/src/Cityhash-stamp/Cityhash-configure.rule
+/home/pxg/PetPS/Cityhash-prefix/src/Cityhash-stamp/Cityhash-download.rule
+/home/pxg/PetPS/Cityhash-prefix/src/Cityhash-stamp/Cityhash-install.rule
+/home/pxg/PetPS/Cityhash-prefix/src/Cityhash-stamp/Cityhash-mkdir.rule
+/home/pxg/PetPS/Cityhash-prefix/src/Cityhash-stamp/Cityhash-patch.rule
+/home/pxg/PetPS/Cityhash-prefix/src/Cityhash-stamp/Cityhash-update.rule

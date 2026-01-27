@@ -30,12 +30,13 @@ public:
   bool is_client;
 
   char NIC_name;
+  bool skip_barrier;  // skip barrier in constructor, call manually later
 
   DSMConfig(const CacheConfig &cacheConfig = CacheConfig(),
-            ClusterInfo cluster_info = ClusterInfo(), 
-            uint64_t dsmSize = 64, bool is_client = false)
+            ClusterInfo cluster_info = ClusterInfo(),
+            uint64_t dsmSize = 64, bool is_client = false, bool skip_barrier = false)
       : cacheConfig(cacheConfig), cluster_info(cluster_info), dsmSize(dsmSize),
-        is_client(is_client) {
+        is_client(is_client), skip_barrier(skip_barrier) {
     machineNR = cluster_info.clientNR + cluster_info.serverNR;
     baseAddr = 0;
   }

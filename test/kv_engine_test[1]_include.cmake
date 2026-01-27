@@ -1,0 +1,5 @@
+if(EXISTS "/home/pxg/PetPS/test/kv_engine_test[1]_tests.cmake")
+  include("/home/pxg/PetPS/test/kv_engine_test[1]_tests.cmake")
+else()
+  add_test(kv_engine_test_NOT_BUILT kv_engine_test_NOT_BUILT)
+endif()

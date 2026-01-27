@@ -57,7 +57,11 @@ bool ShmFile::InitializeDevDax(const std::string &filename, int64 size) {
 }
 
 bool ShmFile::Initialize(const std::string &filename, int64 size) {
-  if (fs::exists("/dev/dax0.0") || PMMmapRegisterCenter::GetConfig().use_dram) {
+  // Check use_dram FIRST - if set, use devdax mode with dram backing
+  if (PMMmapRegisterCenter::GetConfig().use_dram) {
+    LOG(INFO) << "ShmFile, devdax mode (dram backing)";
+    return InitializeDevDax(filename, size);
+  } else if (fs::exists("/dev/dax0.0")) {
     LOG(INFO) << "ShmFile, devdax mode";
     return InitializeDevDax(filename, size);
   } else {

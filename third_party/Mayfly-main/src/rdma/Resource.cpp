@@ -5,14 +5,14 @@
 #include <cmath>
 
 char rnic_name = '0';
-int gid_index = 3;
+int gid_index = 0;  // Changed from 3 to 0 for MLNX_OFED 24.x compatibility
 
 #define likely(x) __builtin_expect(!!(x), 1)
 
 bool createContext(RdmaContext *context, uint8_t port, int gidIndex,
                    uint8_t devIndex) {
-
-  gidIndex = gid_index;
+  // Don't overwrite gidIndex with global - use the passed value
+  // gidIndex = gid_index;
 
   ibv_device *dev = NULL;
   ibv_context *ctx = NULL;
@@ -32,11 +32,10 @@ bool createContext(RdmaContext *context, uint8_t port, int gidIndex,
     Debug::notifyInfo("found %d device(s)", devicesNum);
     goto CreateResourcesExit;
   }
-  // Debug::notifyInfo("Open IB Device");
 
   for (int i = 0; i < devicesNum; ++i) {
-    // printf("Device %d: %s\n", i, ibv_get_device_name(deviceList[i]));
-    if (ibv_get_device_name(deviceList[i])[5] == rnic_name) {
+    const char* dev_name = ibv_get_device_name(deviceList[i]);
+    if (dev_name && dev_name[5] == rnic_name) {
       devIndex = i;
       break;
     }
@@ -65,6 +64,7 @@ bool createContext(RdmaContext *context, uint8_t port, int gidIndex,
     Debug::notifyError("ibv_query_port failed");
     goto CreateResourcesExit;
   }
+  fprintf(stderr, "DEBUG: createContext() port=%d, lid=%u, gidIndex=%d\n", port, portAttr.lid, gidIndex);
 
   // allocate Protection Domain
   // Debug::notifyInfo("Allocate Protection Domain");

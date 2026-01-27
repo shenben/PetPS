@@ -24,6 +24,7 @@ class BenchmarkClientCommon {
     int value_size_ = 0;
     int read_ratio_ = 100;
     std::string dataset_;
+    std::string server_ip_ = "127.0.0.1";
 
     void CheckArgs() {
       CHECK_NE(thread_count_, 0);
@@ -51,8 +52,10 @@ class BenchmarkClientCommon {
   }
 
   void Run() {
+    ::write(STDERR_FILENO, "DEBUG: BenchmarkClientCommon::Run() started\n", 48);
     std::vector<std::unique_ptr<BaseParameterClient>> clients;
     CHECK_LE(args_.thread_count_, kMaxThread);
+    ::write(STDERR_FILENO, "DEBUG: Creating clients\n", 24);
     for (int _ = 0; _ < args_.thread_count_; _++) {
       BaseParameterClient *client;
       if (XPostoffice::GetInstance()->NumServers() == 1) {
@@ -60,10 +63,14 @@ class BenchmarkClientCommon {
         // int,
         //                             int>::NewInstance("LJRPCParameterClient",
         //                                               "127.0.0.1", 1234, 0);
-
+        char client_info[128];
+        snprintf(client_info, sizeof(client_info), "DEBUG: Creating WqRPCParameterClient with server_ip=%s\n", args_.server_ip_.c_str());
+        ::write(STDERR_FILENO, client_info, strlen(client_info));
         client = base::Factory<BaseParameterClient, const std::string &, int,
                                int>::NewInstance("WqRPCParameterClient",
-                                                 "127.0.0.1", 1234, 0);
+                                                 args_.server_ip_.c_str(), 1234, 0);
+        snprintf(client_info, sizeof(client_info), "DEBUG: WqRPCParameterClient created\n");
+        ::write(STDERR_FILENO, client_info, strlen(client_info));
 
         // client = base::Factory<BaseParameterClient, const std::string &,
         // int,
@@ -76,7 +83,7 @@ class BenchmarkClientCommon {
           auto shard_client =
               base::Factory<BaseParameterClient, const std::string &, int,
                             int>::NewInstance("WqRPCParameterClient",
-                                              "127.0.0.1", 1234, shard);
+                                              args_.server_ip_.c_str(), 1234, shard);
           shard_clients.push_back(shard_client);
         }
         client = new AllShardsParameterClientWrapper(
@@ -84,6 +91,7 @@ class BenchmarkClientCommon {
       }
       clients.emplace_back(client);
     }
+    ::write(STDERR_FILENO, "DEBUG: Clients created, creating sample readers\n", 49);
     PetDatasetReader *dataset_reader = nullptr;
     if (args_.dataset_ == "dataset") {
       dataset_reader = new PetDatasetReader(
@@ -107,6 +115,7 @@ class BenchmarkClientCommon {
       sample_readers.emplace_back(each);
     }
 
+    ::write(STDERR_FILENO, "DEBUG: Sample readers created, starting threads\n", 49);
     std::vector<std::thread> threads;
     for (int i = 0; i < args_.thread_count_; i++) {
       threads.push_back(std::thread(&BenchmarkClientCommon::clientThreadLoop,
@@ -125,15 +134,29 @@ class BenchmarkClientCommon {
       stop_thread_id_orders.push_back(i);
 
     // wait all threads in client ready
+    ::write(STDERR_FILENO, "DEBUG: Waiting for threads to be ready\n", 39);
     for (int i = 0; i < args_.thread_count_; i++) {
-      while (tp[i][0] != 0)
+      char dbg[64];
+      snprintf(dbg, sizeof(dbg), "DEBUG: Checking thread %d, tp=%ld\n", i, tp[i][0]);
+      ::write(STDERR_FILENO, dbg, strlen(dbg));
+      while (tp[i][0] != 0) {
+        char warn[64];
+        snprintf(warn, sizeof(warn), "DEBUG: Waiting for thread %d, tp=%ld\n", i, tp[i][0]);
+        ::write(STDERR_FILENO, warn, strlen(warn));
         FB_LOG_EVERY_MS(WARNING, 5000)
             << "main client thread, stalled for waiting thread " << i;
+      }
+      char ready[32];
+      snprintf(ready, sizeof(ready), "DEBUG: Thread %d ready\n", i);
+      ::write(STDERR_FILENO, ready, strlen(ready));
     }
+    ::write(STDERR_FILENO, "DEBUG: All threads ready, calling clients start barrier\n", 57);
     // wait all clients ready
     clients[0]->Barrier("clients start",
                         XPostoffice::GetInstance()->NumClients());
+    ::write(STDERR_FILENO, "DEBUG: Clients start barrier passed\n", 36);
     start_flag_ = true;
+    ::write(STDERR_FILENO, "DEBUG: Starting main benchmark loop\n", 35);
 
     while (true) {
       clock_gettime(CLOCK_REALTIME, &s);
@@ -199,7 +222,13 @@ class BenchmarkClientCommon {
  private:
   void clientThreadLoop(int tid, SampleReader *sample,
                         BaseParameterClient *client) {
+    char enter[64];
+    snprintf(enter, sizeof(enter), "DEBUG: clientThreadLoop %d entered\n", tid);
+    ::write(STDERR_FILENO, enter, strlen(enter));
     auto_bind_core(1);
+    char bind[64];
+    snprintf(bind, sizeof(bind), "DEBUG: clientThreadLoop %d after bind_core\n", tid);
+    ::write(STDERR_FILENO, bind, strlen(bind));
     std::vector<uint64_t> client_keys(args_.batch_read_count_ *
                                       args_.async_req_num_);
     std::vector<float *> recv_buffers;
@@ -207,8 +236,19 @@ class BenchmarkClientCommon {
       recv_buffers.push_back((float *)client->GetReceiveBuffer(
           args_.batch_read_count_ * args_.value_size_));
     }
+    char after_buf[64];
+    snprintf(after_buf, sizeof(after_buf), "DEBUG: clientThreadLoop %d after GetReceiveBuffer, buffers=%zu\n", tid, recv_buffers.size());
+    ::write(STDERR_FILENO, after_buf, strlen(after_buf));
+
+    char before_init[64];
+    snprintf(before_init, sizeof(before_init), "DEBUG: clientThreadLoop %d calling InitThread\n", tid);
+    ::write(STDERR_FILENO, before_init, strlen(before_init));
 
     client->InitThread();
+
+    char after_init[64];
+    snprintf(after_init, sizeof(after_init), "DEBUG: clientThreadLoop %d after InitThread\n", tid);
+    ::write(STDERR_FILENO, after_init, strlen(after_init));
 
     std::vector<int> running_rpc_ids(args_.async_req_num_, -1);
     std::vector<bool> isPullRequest(args_.async_req_num_, true);
@@ -217,9 +257,15 @@ class BenchmarkClientCommon {
 
     // mark this thread ready
     tp[tid][0] = 0;
-    LOG(INFO) << "client thread " << tid << "th ready";
-    while (!start_flag_)
-      ;
+    char ready[64];
+    snprintf(ready, sizeof(ready), "DEBUG: client thread %d ready, tp=0, waiting for start_flag\n", tid);
+    ::write(STDERR_FILENO, ready, strlen(ready));
+    while (!start_flag_) {
+      // busy wait
+    }
+    char started[64];
+    snprintf(started, sizeof(started), "DEBUG: client thread %d started\n", tid);
+    ::write(STDERR_FILENO, started, strlen(started));
 
     while (!stop_flags_[tid]) {
       while (pause_flags_) {
@@ -235,8 +281,14 @@ class BenchmarkClientCommon {
           if (folly::Random::rand32(100) < args_.read_ratio_) {
             // read request
             isPullRequest[req_i] = true;
+            char send_msg[128];
+            snprintf(send_msg, sizeof(send_msg), "DEBUG: Client thread %d sending GetParameter request %d\n", tid, req_i);
+            ::write(STDERR_FILENO, send_msg, strlen(send_msg));
             running_rpc_ids[req_i] = client->GetParameter(
                 keys.ToConstArray(), values, true, true, req_i);
+            char sent_msg[128];
+            snprintf(sent_msg, sizeof(sent_msg), "DEBUG: Client thread %d sent request rpc_id=%d\n", tid, running_rpc_ids[req_i]);
+            ::write(STDERR_FILENO, sent_msg, strlen(sent_msg));
             if (req_i == 0) client_get_timer.start();
           } else {
             isPullRequest[req_i] = false;
@@ -245,7 +297,14 @@ class BenchmarkClientCommon {
             if (req_i == 0) client_put_timer.start();
           }
         } else {
+          char poll_msg[128];
+          snprintf(poll_msg, sizeof(poll_msg), "DEBUG: Client thread %d polling rpc_id=%d\n", tid, running_rpc_ids[req_i]);
+          ::write(STDERR_FILENO, poll_msg, strlen(poll_msg));
           if (client->QueryRPCFinished(running_rpc_ids[req_i])) {
+            char finished_msg[128];
+            snprintf(finished_msg, sizeof(finished_msg), "DEBUG: Client thread %d RPC %d finished, tp[%d][0]=%lu\n",
+                     tid, running_rpc_ids[req_i], tid, tp[tid][0]);
+            ::write(STDERR_FILENO, finished_msg, strlen(finished_msg));
             tp[tid][0] += 1;
             if (req_i == 0) {
               if (isPullRequest[req_i])

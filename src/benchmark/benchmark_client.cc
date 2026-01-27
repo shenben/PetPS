@@ -16,6 +16,7 @@ DEFINE_int32(read_ratio, 100, "read ratio 0~100");
 DEFINE_string(dataset, "zipfian", "zipfian/dataset");
 DEFINE_double(zipf_theta, 0.99, "");
 DEFINE_int64(key_space_m, 100, "request key space in million");
+DEFINE_string(server_ip, "127.0.0.1", "server IP address for cross-node deployment");
 DECLARE_int32(value_size);
 
 std::atomic<bool> stop{false};
@@ -32,6 +33,7 @@ int main(int argc, char *argv[]) {
   args.value_size_ = FLAGS_value_size;
   args.dataset_ = FLAGS_dataset;
   args.read_ratio_ = FLAGS_read_ratio;
+  args.server_ip_ = FLAGS_server_ip;
 
   std::unique_ptr<BenchmarkClientCommon> benchmark_client_;
   benchmark_client_.reset(new BenchmarkClientCommon(args));

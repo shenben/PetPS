@@ -23,10 +23,16 @@ public:
                     1.2 * config.capacity * config.value_size)
 #endif
   {
+    fprintf(stderr, "DEBUG: KVEngineDash constructor entered\n");
+    fflush(stderr);
 
     value_size_ = config.value_size;
+    fprintf(stderr, "DEBUG: About to create directory %s\n", config.path.c_str());
+    fflush(stderr);
     // 1 init dict
     base::file_util::CreateDirectory(config.path);
+    fprintf(stderr, "DEBUG: Directory created\n");
+    fflush(stderr);
     dict_pool_name_ = config.path + "/dict";
     dict_pool_size_ =
         2 * base::PetHash<uint64, base::PetKVData, false>::MemorySize(config.capacity, true);

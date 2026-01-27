@@ -1,0 +1,2 @@
+/usr/bin/ar qc ../../lib/libPMHashPCLHT.a CMakeFiles/PMHashPCLHT.dir/hash/common/vmem.cpp.o CMakeFiles/PMHashPCLHT.dir/hash/PCLHT/clht_lb_res.cpp.o
+/usr/bin/ranlib ../../lib/libPMHashPCLHT.a

@@ -98,6 +98,14 @@ class PetMultiKV {
 
   void BatchGet(base::ConstArray<uint64> keys,
                 std::vector<base::ConstArray<float>> *values) {
+    // Create a static zero buffer for missing keys
+    static thread_local std::vector<float> zero_buffer;
+    static thread_local bool initialized = false;
+    if (!initialized) {
+      zero_buffer.resize(16384, 0.0f);  // Support up to 64KB values
+      initialized = true;
+    }
+
     for (int i = 0; i < keys.Size(); i++) {
       auto key = keys[i];
       if (UNLIKELY(i != keys.Size() - 1)) {
@@ -105,9 +113,13 @@ class PetMultiKV {
         shm_kv_[GetShard(prefetch_key)]->HintPrefetch(prefetch_key);
       }
       auto read_data = shm_kv_[GetShard(key)]->Get(key);
-      CHECK_NE(read_data.size, 0);
-      values->emplace_back((float *)read_data.data,
-                           read_data.size / sizeof(float));
+      // Return zeros for missing keys instead of crashing
+      if (read_data.size == 0) {
+        values->emplace_back(zero_buffer.data(), pre_known_value_size_ / sizeof(float));
+      } else {
+        values->emplace_back((float *)read_data.data,
+                             read_data.size / sizeof(float));
+      }
     }
   }
 

@@ -1,0 +1,29 @@
+use memcached in 10.113.164.246:21111
+[4mMachine NR: 3 [server: 2, client: 1]
+[0m
+use memcached in 10.113.164.246:21111
+*** Aborted at 1769226472 (Unix time, try 'date -d @1769226472') ***
+*** Signal 15 (SIGTERM) (0x3ec000e2a70) received by PID 928369 (pthread TID 0x7f5d5f3ab500) (linux TID 928369) (maybe from PID 928368, UID 1004) (code: 0), stack trace: ***
+./build/bin/benchmark_client(+0x1db7ba)[0x55bf149507ba]
+./build/bin/benchmark_client(+0x1993e0)[0x55bf1490e3e0]
+./build/bin/benchmark_client(+0x1978b4)[0x55bf1490c8b4]
+./build/bin/benchmark_client(+0x19799a)[0x55bf1490c99a]
+/lib/x86_64-linux-gnu/libc.so.6(+0x4251f)[0x7f5d5f5cb51f]
+/lib/x86_64-linux-gnu/libc.so.6(send+0x6e)[0x7f5d5f6b096e]
+/lib/x86_64-linux-gnu/libmemcached.so.11(+0xb798)[0x7f5d5fa55798]
+/lib/x86_64-linux-gnu/libmemcached.so.11(+0xbaa5)[0x7f5d5fa55aa5]
+/lib/x86_64-linux-gnu/libmemcached.so.11(+0xf34f)[0x7f5d5fa5934f]
+/lib/x86_64-linux-gnu/libmemcached.so.11(memcached_get_by_key+0xb3)[0x7f5d5fa5bae3]
+/lib/x86_64-linux-gnu/libmemcached.so.11(memcached_get+0x1d)[0x7f5d5fa5bd8d]
+./build/bin/benchmark_client(+0x226eb6)[0x55bf1499beb6]
+./build/bin/benchmark_client(+0x226f51)[0x55bf1499bf51]
+./build/bin/benchmark_client(+0x224332)[0x55bf14999332]
+./build/bin/benchmark_client(+0x22445a)[0x55bf1499945a]
+./build/bin/benchmark_client(+0x4fd8a)[0x55bf147c4d8a]
+./build/bin/benchmark_client(+0x515ab)[0x55bf147c65ab]
+./build/bin/benchmark_client(+0x4d542)[0x55bf147c2542]
+./build/bin/benchmark_client(+0x1db1c)[0x55bf14792b1c]
+/lib/x86_64-linux-gnu/libc.so.6(+0x29d8f)[0x7f5d5f5b2d8f]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x7f)[0x7f5d5f5b2e3f]
+./build/bin/benchmark_client(+0x1e1d4)[0x55bf147931d4]
+(safe mode, symbolizer not available)

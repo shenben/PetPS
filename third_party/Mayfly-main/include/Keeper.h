@@ -22,6 +22,7 @@ class Keeper {
 
 private:
   static const char *SERVER_NUM_KEY;
+  static const char *CLIENT_NUM_KEY;
 
   uint32_t maxServer;
   uint16_t curServer;
@@ -30,6 +31,9 @@ private:
   uint16_t myPort;
 
   memcached_st *memc;
+
+protected:
+  uint16_t expectedClientNR;
 
 protected:
   bool connectMemcached();
@@ -45,8 +49,10 @@ public:
   uint16_t getMyNodeID() const { return this->myNodeID; }
   uint16_t getServerNR() const { return this->maxServer; }
   uint16_t getMyPort() const { return this->myPort; }
+  uint16_t getExpectedClientNR() const { return this->expectedClientNR; }
 
   std::string getMyIP() const { return this->myIP; }
+  memcached_st *getMemc() const { return this->memc; }
 
   void memSet(const char *key, uint32_t klen, const char *val, uint32_t vlen);
   char *memGet(const char *key, uint32_t klen, size_t *v_size = nullptr);

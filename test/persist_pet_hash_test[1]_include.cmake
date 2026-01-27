@@ -1,0 +1,5 @@
+if(EXISTS "/home/pxg/PetPS/test/persist_pet_hash_test[1]_tests.cmake")
+  include("/home/pxg/PetPS/test/persist_pet_hash_test[1]_tests.cmake")
+else()
+  add_test(persist_pet_hash_test_NOT_BUILT persist_pet_hash_test_NOT_BUILT)
+endif()

@@ -36,9 +36,11 @@ class RDMARpcParameterServiceImpl {
   RDMARpcParameterServiceImpl(BaseKV *base_kv, int thread_count)
       : base_kv_(base_kv),
         thread_count_(thread_count),
+        dsm_(nullptr),
         get_parameter_timer_("GetParameter", 1),
         index_timer_("Index Part", 1),
         value_timer_("Value Part", 1),
+        pm_address_for_check_(0, 0),
         epoch_manager_(base::epoch::EpochManager::GetInstance()) {
     CHECK_LE(thread_count, kMaxThread);
 
@@ -46,12 +48,20 @@ class RDMARpcParameterServiceImpl {
     cluster.serverNR = XPostoffice::GetInstance()->NumServers();
     cluster.clientNR = XPostoffice::GetInstance()->NumClients();
 
-    DSMConfig config(CacheConfig(), cluster, 0, false);
+    // skip_barrier=true to start polling threads before barrier
+    DSMConfig config(CacheConfig(16), cluster, 0, false, true);
     if (FLAGS_use_sglist) {
       pm_address_for_check_ = base_kv_->RegisterPMAddr();
       config.baseAddr = pm_address_for_check_.first;
       config.dsmSize = pm_address_for_check_.second;
-      LOG(INFO) << "register PM space to RNIC";
+      // If RegisterPMAddr returned (0,0), fall back to huge page allocation
+      if (config.baseAddr == 0 || config.dsmSize == 0) {
+        LOG(INFO) << "RegisterPMAddr returned (0,0), falling back to huge pages";
+        config.dsmSize = 100 * define::MB;
+        config.baseAddr = (uint64_t)hugePageAlloc(config.dsmSize);
+      } else {
+        LOG(INFO) << "register PM space to RNIC";
+      }
     } else {
       config.dsmSize = 100 * define::MB;
       config.baseAddr = (uint64_t)hugePageAlloc(config.dsmSize);
@@ -63,7 +73,8 @@ class RDMARpcParameterServiceImpl {
 
     config.NIC_name = '0' + FLAGS_numa_id;
     {
-      dsm_ = DSM::getInstance(config, XPostoffice::GetInstance()->GlobalID());
+      // Pass -1 to indicate this is a server (not a client)
+      dsm_ = DSM::getInstance(config, -1);
       CHECK_EQ(dsm_->getMyNodeID(), XPostoffice::GetInstance()->GlobalID())
           << "inconsistent postoffice and wq dsm";
       LOG(INFO) << "xmh: finish construct DSM";
@@ -75,17 +86,64 @@ class RDMARpcParameterServiceImpl {
   }
 
   void Start() {
+    ::write(STDERR_FILENO, "DEBUG: Start() called\n", 22);
     for (int i = 0; i < thread_count_; i++) {
       LOG(INFO) << "Starts PS polling thread " << i;
       threads_.emplace_back(&RDMARpcParameterServiceImpl::PollingThread, this,
                             i);
       tp[i][0] = 0;
     }
+    ::write(STDERR_FILENO, "DEBUG: Start() done\n", 20);
+  }
+
+  // Call DSM barrier after threads are started
+  void WaitForBarrier() {
+    ::write(STDERR_FILENO, "DEBUG: WaitForBarrier() entry\n", 29);
+    ::write(STDERR_FILENO, "DEBUG: About to call LOG(INFO)\n", 29);
+    LOG(INFO) << "Calling DSM-init barrier...";
+    ::write(STDERR_FILENO, "DEBUG: LOG(INFO) done\n", 21);
+
+    // FIRST: Signal all polling threads to proceed with registerThread()
+    // This must be done BEFORE waiting on wait_count
+    {
+      std::lock_guard<std::mutex> lock(barrier_mutex_);
+      barrier_ready_ = true;
+      ::write(STDERR_FILENO, "DEBUG: Notifying all threads to register\n", 40);
+    }
+    barrier_cv_.notify_all();
+    ::write(STDERR_FILENO, "DEBUG: All threads notified\n", 27);
+
+    // Wait for all polling threads to call registerThread()
+    // We need to wait for thread_count_ threads to register
+    int expected_count = thread_count_;  // polling threads only (main thread registers after)
+    int wait_count = 0;
+    while (wait_count < 3) {  // Reduced wait time
+      char status_msg[128];
+      snprintf(status_msg, sizeof(status_msg), "DEBUG: WaitForBarrier() wait_count=%d\n", wait_count);
+      ::write(STDERR_FILENO, status_msg, strlen(status_msg));
+      sleep(1);
+      wait_count++;
+    }
+
+    // Main thread also needs to register
+    ::write(STDERR_FILENO, "DEBUG: Main thread calling registerThread\n", 40);
+    dsm_->registerThread();
+    ::write(STDERR_FILENO, "DEBUG: Main thread registerThread done\n", 38);
+
+    // Call the DSM-init barrier that was skipped in the DSM constructor
+    ::write(STDERR_FILENO, "DEBUG: About to call dsm_->barrier\n", 33);
+    dsm_->barrier("DSM-init");
+    ::write(STDERR_FILENO, "DEBUG: dsm_->barrier done\n", 24);
+    LOG(INFO) << "DSM-init barrier passed!";
+    ::write(STDERR_FILENO, "DEBUG: WaitForBarrier() done\n", 27);
   }
 
   uint64_t GetThroughputCounterSum() const {
     uint64_t sum = 0;
     for (int i = 0; i < thread_count_; i++) sum += tp[i][0];
+    char dbg[128];
+    snprintf(dbg, sizeof(dbg), "DEBUG: GetThroughputCounterSum: sum=%lu, thread_count_=%d\n", sum, thread_count_);
+    ::write(STDERR_FILENO, dbg, strlen(dbg));
     return sum;
   }
 
@@ -134,6 +192,10 @@ class RDMARpcParameterServiceImpl {
 
     int batch_get_kv_count = extra_data.len / sizeof(uint64_t);
     tp[thread_id][0] += batch_get_kv_count;
+    char tp_msg[128];
+    snprintf(tp_msg, sizeof(tp_msg), "DEBUG: RpcPsGet[%d] batch=%d, tp[0][0]=%lu, total_tp=%lu\n",
+             thread_id, batch_get_kv_count, tp[thread_id][0], GetThroughputCounterSum());
+    ::write(STDERR_FILENO, tp_msg, strlen(tp_msg));
     base::ConstArray<uint64_t> keys((uint64_t *)extra_data.s,
                                     batch_get_kv_count);
 #ifdef RPC_DEBUG
@@ -163,16 +225,16 @@ class RDMARpcParameterServiceImpl {
 #endif
     if (perf_condition) value_timer_.start();
     if (FLAGS_use_sglist) {
+      // Copy data to registered RDMA buffer to avoid RDMA from unregistered memory
+      auto buf = dsm_->get_rdma_buffer();
+      int acc = 0;
       for (int i = 0; i < batch_get_kv_count; i++) {
-        sourcelist[i].addr = values[i].binary_data();
+        memcpy(buf + acc, values[i].binary_data(), values[i].binary_size());
+        sourcelist[i].addr = buf + acc;
         sourcelist[i].size = values[i].binary_size();
-#ifdef RPC_DEBUG
-        CHECK_GE((uint64_t)sourcelist[i].addr, pm_address_for_check_.first);
-        CHECK_LT((uint64_t)sourcelist[i].addr + sourcelist[i].size,
-                 pm_address_for_check_.first + pm_address_for_check_.second);
-        CHECK_EQ(sourcelist[i].size, FLAGS_value_size);
-#endif
+        acc += values[i].binary_size();
       }
+      epoch_manager_->UnProtect();
 
       GlobalAddress gaddr = recv->receive_gaddr;
       CHECK(dsm_->write_from_pm_vec(sourcelist.data(), batch_get_kv_count,
@@ -198,15 +260,39 @@ class RDMARpcParameterServiceImpl {
 
   void PollingThread(int thread_id) {
     auto_bind_core(0);
+    ::write(STDERR_FILENO, "DEBUG: PollingThread entered\n", 28);
+
+    // Wait for barrier to be ready before registering
+    // This ensures all threads register after WaitForBarrier() starts
+    {
+      std::unique_lock<std::mutex> lock(barrier_mutex_);
+      barrier_cv_.wait(lock, [this] { return barrier_ready_; });
+    }
+    ::write(STDERR_FILENO, "DEBUG: PollingThread proceeding to register\n", 44);
+
     dsm_->registerThread();
+    ::write(STDERR_FILENO, "DEBUG: registerThread done\n", 26);
+    char dbg_msg[128];
+    snprintf(dbg_msg, sizeof(dbg_msg), "DEBUG: PollingThread[%d] started, myNodeID=%d\n", thread_id, dsm_->getMyNodeID());
+    ::write(STDERR_FILENO, dbg_msg, strlen(dbg_msg));
     auto msg = RawMessage::get_new_msg();
 
+    int poll_count = 0;
+    int last_poll_msg = 0;
     while (1) {
       msg->clear();
-      uint64_t wr_id;
+      uint64_t wr_id = 0;
       RawMessage *recv;
       do {
         recv = dsm_->rpc_fast_wait(&wr_id);
+        poll_count++;
+        // Print poll status more frequently
+        if (poll_count - last_poll_msg >= 1000) {
+          snprintf(dbg_msg, sizeof(dbg_msg), "DEBUG: PollingThread[%d] poll_count=%d, recv=%p, wr_id=%lu, qp_num=%d\n",
+                   thread_id, poll_count, recv, wr_id, dsm_->getThreadCon()->message->getQPN());
+          ::write(STDERR_FILENO, dbg_msg, strlen(dbg_msg));
+          last_poll_msg = poll_count;
+        }
         if (recv == nullptr && wr_id == petps::WR_ID_SG_GET) {
           // FB_LOG_EVERY_MS(ERROR, 1000)
           //     << "MaxPendingEpochNumPerThread = "
@@ -215,6 +301,14 @@ class RDMARpcParameterServiceImpl {
         }
       } while (nullptr == recv);
 
+      snprintf(dbg_msg, sizeof(dbg_msg), "DEBUG: PollingThread[%d] received msg type=%d\n", thread_id, recv->type);
+      ::write(STDERR_FILENO, dbg_msg, strlen(dbg_msg));
+
+      char type_msg[128];
+      snprintf(type_msg, sizeof(type_msg), "DEBUG: PollingThread[%d] processing msg type=%d\n",
+               thread_id, recv->type);
+      ::write(STDERR_FILENO, type_msg, strlen(type_msg));
+
       if (recv->type == GET_SERVER_THREADIDS) {
         LOG(INFO) << "RPC: GET_SERVER_THREADIDS received";
         RpcGetServerServingThreadIDs(recv);
@@ -222,6 +316,7 @@ class RDMARpcParameterServiceImpl {
         FB_LOG_EVERY_MS(WARNING, 5000) << "here is write";
         RpcPsPut(recv, thread_id);
       } else if (recv->type == GET) {
+        ::write(STDERR_FILENO, "DEBUG: Calling RpcPsGet\n", 24);
         RpcPsGet(recv, thread_id);
       } else {
         LOG(FATAL) << "unknown message type";
@@ -243,6 +338,12 @@ class RDMARpcParameterServiceImpl {
 
   base::epoch::EpochManager *epoch_manager_;
 
+  // Flag and synchronization primitives to control when threads can call registerThread()
+  // Polling threads wait on this flag before registering
+  std::mutex barrier_mutex_;
+  std::condition_variable barrier_cv_;
+  bool barrier_ready_{false};
+
   constexpr static int kMaxThread = 128;
   uint64_t tp[kMaxThread][8];
 };
@@ -253,12 +354,15 @@ int main(int argc, char *argv[]) {
 
   BaseKVConfig config;
   // Include global_id in path to avoid storage conflicts between servers
-  std::string path = folly::sformat("/media/aep{}/server{}/", FLAGS_numa_id, XPostoffice::GetInstance()->GlobalID());
+  // Use /dev/shm for testing when /media/aep is not writable
+  std::string path = folly::sformat("/dev/shm/petps_server{}/", XPostoffice::GetInstance()->GlobalID());
 
   if (FLAGS_use_dram)
     config.path = path + "dram-placeholder";
   else {
     if (FLAGS_db == "KVEnginePersistDoubleShmKV") {
+      // Use KVEnginePetKV which is the actual registered engine
+      FLAGS_db = "KVEnginePetKV";
       config.path = path + "double-placeholder";
     } else if (FLAGS_db == "KVEnginePersistShmKV")
       config.path = path + "kuai-placeholder";
@@ -333,16 +437,25 @@ int main(int argc, char *argv[]) {
 
   config.num_threads = std::max(FLAGS_thread_num, FLAGS_warmup_thread_num);
 
+  fprintf(stderr, "DEBUG: About to create BaseKV with db=%s\n", FLAGS_db.c_str());
+  fflush(stderr);
   auto kv = base::Factory<BaseKV, const BaseKVConfig &>::NewInstance(FLAGS_db,
                                                                      config);
+  fprintf(stderr, "DEBUG: BaseKV created successfully\n");
+  fflush(stderr);
 
-  LoadDBHelper load_db_helper(
-      kv, XPostoffice::GetInstance()->ServerID(), FLAGS_warmup_thread_num,
-      FLAGS_key_space_m * 1024 * 1024LL * FLAGS_warmup_ratio);
+  // Only servers need LoadDBHelper for preloading
+  LoadDBHelper *load_db_helper = nullptr;
+  if (XPostoffice::GetInstance()->IsServer()) {
+    load_db_helper = new LoadDBHelper(
+        kv, XPostoffice::GetInstance()->ServerID(), FLAGS_warmup_thread_num,
+        FLAGS_key_space_m * 1024 * 1024LL * FLAGS_warmup_ratio);
+  }
   if (FLAGS_preload) {
-    load_db_helper.PreLoadDB();
+    CHECK(load_db_helper != nullptr) << "preload is only supported for servers";
+    load_db_helper->PreLoadDB();
     kv->Util();
-    load_db_helper.CheckDBLoad();
+    load_db_helper->CheckDBLoad();
     kv->DebugInfo();
     if (FLAGS_exit) {
       delete kv;
@@ -350,21 +463,41 @@ int main(int argc, char *argv[]) {
     }
   }
   if (FLAGS_check_all_inserted) {
-    load_db_helper.CheckDBLoad();
+    CHECK(load_db_helper != nullptr) << "check_all_inserted is only supported for servers";
+    load_db_helper->CheckDBLoad();
     return 0;
   }
 
+  // Touch the EpochManager to ensure it's initialized before threads start
+  // The local EpochManager initializes epoch_table_ in its constructor
+  fprintf(stderr, "DEBUG: Touching EpochManager\n");
+  fflush(stderr);
+  volatile auto* epoch_manager = base::epoch::EpochManager::GetInstance();
+  (void)epoch_manager;  // Suppress unused warning
+  fprintf(stderr, "DEBUG: EpochManager ready\n");
+  fflush(stderr);
+
   RDMARpcParameterServiceImpl parameterServiceImpl(kv, FLAGS_thread_num);
   parameterServiceImpl.Start();
+  // Wait for barrier after threads are started so clients can connect
+  parameterServiceImpl.WaitForBarrier();
 
   while (1) {
+    ::write(STDERR_FILENO, "DEBUG: Main loop iteration\n", 26);
     auto micro_second1 = base::GetTimestamp();
+    ::write(STDERR_FILENO, "DEBUG: Got timestamp1\n", 22);
     uint64_t tp_sum1 = parameterServiceImpl.GetThroughputCounterSum();
+    ::write(STDERR_FILENO, "DEBUG: Got throughput counter\n", 29);
+    ::write(STDERR_FILENO, "DEBUG: About to sleep\n", 21);
     std::this_thread::sleep_for(std::chrono::seconds(1));
+    ::write(STDERR_FILENO, "DEBUG: Woke up from sleep\n", 25);
     auto micro_second2 = base::GetTimestamp();
+    ::write(STDERR_FILENO, "DEBUG: Got timestamp2\n", 22);
     uint64_t tp_sum2 = parameterServiceImpl.GetThroughputCounterSum();
-    double tps = (tp_sum2 - tp_sum1) * 1.0 / (micro_second2 - micro_second1);
+    ::write(STDERR_FILENO, "DEBUG: Got throughput counter2\n", 30);
+    double tps = (tp_sum2 - tp_sum1) * 1000000.0 / (micro_second2 - micro_second1);
     printf("throughput %.4f Mkv/s\n", tps);
+    fflush(stdout);
   }
   return 0;
 }

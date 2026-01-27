@@ -16,6 +16,7 @@ std::string trim(const std::string &s) {
 }
 
 const char *Keeper::SERVER_NUM_KEY = "serverNum";
+const char *Keeper::CLIENT_NUM_KEY = "clientNum";
 
 Keeper::Keeper(uint32_t maxServer)
     : maxServer(maxServer), curServer(0), memc(NULL) {}
@@ -29,6 +30,8 @@ Keeper::~Keeper() {
 bool Keeper::connectMemcached() {
   memcached_server_st *servers = NULL;
   memcached_return rc;
+
+  fprintf(stderr, "DEBUG: connectMemcached() started\n");
 
   std::ifstream conf(MAYFLY_PATH "/memcached.conf");
 
@@ -75,15 +78,36 @@ bool Keeper::disconnectMemcached() {
 void Keeper::serverEnter(int globalID) {
   memcached_return rc;
   uint64_t serverNum;
+
   if (globalID == -1) {
+    // I am a server
+    // Initialize serverNum key if it doesn't exist (server only)
+    {
+      memcached_return rc_init;
+      rc_init = memcached_set(memc, SERVER_NUM_KEY, strlen(SERVER_NUM_KEY),
+                              "0", 1, (time_t)0, (uint32_t)0);
+      fprintf(stderr, "DEBUG: Initialized %s, rc=%s\n", SERVER_NUM_KEY, memcached_strerror(memc, rc_init));
+    }
+
+    fprintf(stderr, "DEBUG: serverEnter() for server (globalID=-1)\n");
     while (true) {
+      // First verify the key exists
+      uint32_t flags;
+      size_t value_len;
+      char* value = memcached_get(memc, SERVER_NUM_KEY, strlen(SERVER_NUM_KEY), &value_len, &flags, &rc);
+      if (value) {
+        fprintf(stderr, "DEBUG: Key %s exists with value length=%zu\n", SERVER_NUM_KEY, value_len);
+        free(value);
+      } else {
+        fprintf(stderr, "DEBUG: Key %s does NOT exist, rc=%s\n", SERVER_NUM_KEY, memcached_strerror(memc, rc));
+      }
       rc = memcached_increment(memc, SERVER_NUM_KEY, strlen(SERVER_NUM_KEY), 1,
                                &serverNum);
       if (rc == MEMCACHED_SUCCESS) {
-
         myNodeID = serverNum - 1;
-
-        printf("I am servers %d\n", myNodeID);
+        printf("I am server %d\n", myNodeID);
+        // Set xmh-consistent-dsm to allow first client (globalID=0) to proceed
+        memSet("xmh-consistent-dsm", strlen("xmh-consistent-dsm"), "1", 1);
         return;
       }
       fprintf(stderr,
@@ -92,72 +116,209 @@ void Keeper::serverEnter(int globalID) {
       usleep(10000);
     }
   } else {
-    while (1) {
-      if (globalID == 0)
-        break;
-      auto str =
-          memGet("xmh-consistent-dsm", strlen("xmh-consistent-dsm"), nullptr);
-      if (std::atoi(str) == globalID)
-        break;
-    }
-    while (true) {
-      rc = memcached_increment(memc, SERVER_NUM_KEY, strlen(SERVER_NUM_KEY), 1,
-                               &serverNum);
-      if (rc == MEMCACHED_SUCCESS) {
+    // I am a client
+    fprintf(stderr, "DEBUG: serverEnter() for client (globalID=%d)\n", globalID);
 
-        myNodeID = serverNum - 1;
-
-        printf("I am servers %d\n", myNodeID);
-        auto v = std::to_string(globalID + 1);
-        memSet("xmh-consistent-dsm", strlen("xmh-consistent-dsm"), v.c_str(),
-               v.size());
-        return;
+    // Get the server count to determine our node ID
+    // Clients have node IDs >= serverNR
+    size_t l;
+    uint32_t flags;
+    memcached_return rc;
+    uint32_t serverNum = 0;
+    {
+      char *serverNumStr = memcached_get(memc, SERVER_NUM_KEY,
+                                         strlen(SERVER_NUM_KEY), &l, &flags, &rc);
+      if (rc == MEMCACHED_SUCCESS && serverNumStr) {
+        serverNum = atoi(serverNumStr);
+        free(serverNumStr);
       }
-      fprintf(stderr,
-              "Server %d Counld't incr value and get ID: %s, retry...\n",
-              myNodeID, memcached_strerror(memc, rc));
-      usleep(10000);
     }
+
+    // Get the client count and increment to get our index
+    uint32_t curClientNum = 0;
+    {
+      char *clientNumStr = memcached_get(memc, CLIENT_NUM_KEY,
+                                         strlen(CLIENT_NUM_KEY), &l, &flags, &rc);
+      if (rc == MEMCACHED_SUCCESS && clientNumStr) {
+        curClientNum = atoi(clientNumStr);
+        free(clientNumStr);
+      }
+    }
+
+    // Increment to reserve our spot
+    uint32_t newClientNum = curClientNum + 1;
+    memcached_set(memc, CLIENT_NUM_KEY, strlen(CLIENT_NUM_KEY),
+                  std::to_string(newClientNum).c_str(), std::to_string(newClientNum).length(),
+                  (time_t)0, (uint32_t)0);
+
+    fprintf(stderr, "DEBUG: client incremented clientNum from %u to %u\n", curClientNum, newClientNum);
+
+    // Client node ID = serverNum + (newClientNum - 1) = serverNum + curClientNum
+    // This ensures: first client (curClientNum=0) gets node ID = serverNum + 0
+    //              second client (curClientNum=1) gets node ID = serverNum + 1
+    // The server connects to clients using: serverNum + i where i is 0, 1, 2, ...
+    myNodeID = serverNum + curClientNum;
+    printf("I am client %d (globalID=%d, serverNR=%u, clientIndex=%u)\n", myNodeID, globalID, serverNum, curClientNum);
+
+    // Signal that we're ready (wait for server to signal that it's ready)
+    // The server sets this key to "1" when it completes initialization
+    while (1) {
+      auto str = memGet("xmh-consistent-dsm", strlen("xmh-consistent-dsm"), nullptr);
+      int val = std::atoi(str);
+      if (val >= 1) {
+        fprintf(stderr, "DEBUG: client (globalID=%d) found xmh-consistent-dsm=%d, proceeding\n", globalID, val);
+        break;
+      }
+      usleep(1000);
+    }
+
+    // Initialize clientNum key
+    {
+      memcached_return rc_init;
+      rc_init = memcached_set(memc, CLIENT_NUM_KEY, strlen(CLIENT_NUM_KEY),
+                              "0", 1, (time_t)0, (uint32_t)0);
+      (void)rc_init;
+    }
+
+    // Increment client count (for informational purposes)
+    uint64_t clientNum;
+    rc = memcached_increment(memc, CLIENT_NUM_KEY, strlen(CLIENT_NUM_KEY), 1,
+                             &clientNum);
+    if (rc == MEMCACHED_SUCCESS) {
+      fprintf(stderr, "DEBUG: client incremented clientNum to %lu\n", clientNum);
+    }
+
+    // Signal next client (if any)
+    auto v = std::to_string(globalID + 1);
+    memSet("xmh-consistent-dsm", strlen("xmh-consistent-dsm"), v.c_str(),
+           v.size());
+    return;
   }
 }
 
 void Keeper::serverConnect() {
-
   size_t l;
   uint32_t flags;
   memcached_return rc;
 
-  while (curServer < maxServer) {
-    // std::cout << "poll in server connect";
+  // Determine if I'm a server or client
+  // Servers have IDs < maxServer, clients have IDs >= maxServer
+  bool is_server = (myNodeID < maxServer);
+
+  // Get the server count
+  uint32_t serverNum = 0;
+  {
     char *serverNumStr = memcached_get(memc, SERVER_NUM_KEY,
                                        strlen(SERVER_NUM_KEY), &l, &flags, &rc);
-    if (rc != MEMCACHED_SUCCESS) {
-      fprintf(stderr, "Server %d Counld't get serverNum: %s, retry\n", myNodeID,
-              memcached_strerror(memc, rc));
-      continue;
+    if (rc == MEMCACHED_SUCCESS && serverNumStr) {
+      serverNum = atoi(serverNumStr);
+      free(serverNumStr);
     }
-    uint32_t serverNum = atoi(serverNumStr);
-    free(serverNumStr);
+  }
 
-    // /connect server K
+  // Get the client count
+  uint32_t clientNum = 0;
+  {
+    char *clientNumStr = memcached_get(memc, CLIENT_NUM_KEY,
+                                       strlen(CLIENT_NUM_KEY), &l, &flags, &rc);
+    if (rc == MEMCACHED_SUCCESS && clientNumStr) {
+      clientNum = atoi(clientNumStr);
+      free(clientNumStr);
+    }
+  }
+
+  fprintf(stderr, "DEBUG: serverConnect() is_server=%d, serverNum=%u, clientNum=%u, myNodeID=%d, maxServer=%u\n",
+          is_server, serverNum, clientNum, myNodeID, maxServer);
+
+  if (is_server) {
+    // I am a server: connect to other servers and all clients
+    // Connect to other servers (k < serverNum, k != myNodeID)
     for (size_t k = curServer; k < serverNum; ++k) {
       if (k != myNodeID) {
         connectNode(k);
-        printf("I connect server %zu\n", k);
+        fprintf(stderr, "DEBUG: I connect to server %zu\n", k);
       }
     }
     curServer = serverNum;
+
+    // Connect to clients (client IDs start from serverNum)
+    // Client i has ID = serverNum + i
+    uint32_t totalClients = clientNum;  // Current number of clients
+    for (uint32_t i = 0; i < totalClients; i++) {
+      uint16_t clientID = serverNum + i;
+      if (clientID != myNodeID) {  // Should always be true for servers
+        connectNode(clientID);
+        fprintf(stderr, "DEBUG: I connect to client %u (clientIndex=%u)\n", clientID, i);
+      }
+    }
+
+    // For servers, we also need to check if there are any late-registering clients
+    // Keep checking until we see all expected clients
+    uint32_t lastClientNum = clientNum;
+    uint32_t expectedClients = this->getExpectedClientNR();  // Get from cluster config
+    fprintf(stderr, "DEBUG: Starting late client polling, initial clientNum=%u, expectedClients=%u\n", clientNum, expectedClients);
+
+    // Wait indefinitely for all expected clients
+    while (lastClientNum < expectedClients) {
+      usleep(100000);  // 100ms
+
+      // Re-read client count
+      char *newClientNumStr = memcached_get(memc, CLIENT_NUM_KEY,
+                                           strlen(CLIENT_NUM_KEY), &l, &flags, &rc);
+      if (rc == MEMCACHED_SUCCESS && newClientNumStr) {
+        uint32_t newClientNum = atoi(newClientNumStr);
+        free(newClientNumStr);
+
+        if (newClientNum > lastClientNum) {
+          fprintf(stderr, "DEBUG: New clients detected! last=%u, new=%u\n", lastClientNum, newClientNum);
+          // Connect to new clients
+          for (uint32_t i = lastClientNum; i < newClientNum; i++) {
+            uint16_t clientID = serverNum + i;
+            if (clientID != myNodeID) {
+              connectNode(clientID);
+              fprintf(stderr, "DEBUG: Late connect to client %u (clientIndex=%u)\n", clientID, i);
+            }
+          }
+          lastClientNum = newClientNum;
+        }
+      }
+      // Log progress periodically
+      if (lastClientNum < expectedClients) {
+        fprintf(stderr, "DEBUG: Waiting for clients... %u/%u connected\n", lastClientNum, expectedClients);
+      }
+    }
+    fprintf(stderr, "DEBUG: All %u clients connected\n", expectedClients);
+  } else {
+    // I am a client: connect to all servers
+    // Servers have IDs 0 to serverNum-1
+    for (uint16_t k = 0; k < serverNum; ++k) {
+      if (k != myNodeID) {
+        connectNode(k);
+        fprintf(stderr, "DEBUG: I connect to server %d\n", k);
+      }
+    }
+    curServer = serverNum;  // Mark that we've processed all servers
   }
+
+  fprintf(stderr, "DEBUG: serverConnect() completed\n");
 }
 
 void Keeper::memSet(const char *key, uint32_t klen, const char *val,
                     uint32_t vlen) {
 
   memcached_return rc;
+  int retry_count = 0;
   while (true) {
     rc = memcached_set(memc, key, klen, val, vlen, (time_t)0, (uint32_t)0);
     if (rc == MEMCACHED_SUCCESS) {
+      if (retry_count > 0) {
+        fprintf(stderr, "DEBUG: memSet succeeded after %d retries for key '%s'\n", retry_count, key);
+      }
       break;
+    }
+    retry_count++;
+    if (retry_count % 1000 == 0) {
+      fprintf(stderr, "DEBUG: memSet retry %d for key '%s', error: %s\n", retry_count, key, memcached_strerror(memc, rc));
     }
     usleep(400);
   }
@@ -169,6 +330,7 @@ char *Keeper::memGet(const char *key, uint32_t klen, size_t *v_size) {
   char *res;
   uint32_t flags;
   memcached_return rc;
+  int retry_count = 0;
 
   while (true) {
 
@@ -176,7 +338,14 @@ char *Keeper::memGet(const char *key, uint32_t klen, size_t *v_size) {
     if (rc == MEMCACHED_SUCCESS) {
       break;
     }
+    retry_count++;
+    if (retry_count % 1000 == 0) {
+      fprintf(stderr, "DEBUG: memGet retry %d for key '%s', error: %s\n", retry_count, key, memcached_strerror(memc, rc));
+    }
     usleep(400 * myNodeID);
+  }
+  if (retry_count > 0) {
+    fprintf(stderr, "DEBUG: memGet succeeded after %d retries for key '%s'\n", retry_count, key);
   }
 
   if (v_size != nullptr) {
@@ -188,11 +357,17 @@ char *Keeper::memGet(const char *key, uint32_t klen, size_t *v_size) {
 
 uint64_t Keeper::memFetchAndAdd(const char *key, uint32_t klen) {
   uint64_t res;
+  int retry_count = 0;
   while (true) {
     memcached_return rc = memcached_increment(memc, key, klen, 1, &res);
     if (rc == MEMCACHED_SUCCESS) {
+      fprintf(stderr, "DEBUG: memFetchAndAdd succeeded for key '%s', value=%lu\n", key, res);
       return res;
     }
-    // usleep(10000);
+    retry_count++;
+    if (retry_count % 1000 == 0) {
+      fprintf(stderr, "DEBUG: memFetchAndAdd retry %d for key '%s', error: %s\n", retry_count, key, memcached_strerror(memc, rc));
+    }
+    usleep(400);
   }
 }

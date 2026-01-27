@@ -22,6 +22,9 @@ set(BOOST_INCLUDEDIR "/usr/include")
 set(BOOST_LIBRARYDIR "/usr/lib/x86_64-linux-gnu")
 set(Boost_NO_SYSTEM_PATHS OFF)
 
+# Enable PMEM support (requires ndctl headers)
+set(USE_PMEM ON CACHE BOOL "Enable persistent memory support")
+
 find_package(folly REQUIRED)
 find_package(glog CONFIG REQUIRED)
 find_package(Boost REQUIRED COMPONENTS context filesystem program_options regex system thread)

@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/pxg/PetPS/CMakeFiles/Cityhash"
+		},
+		{
+			"file" : "/home/pxg/PetPS/CMakeFiles/Cityhash.rule"
+		},
+		{
+			"file" : "/home/pxg/PetPS/CMakeFiles/Cityhash-complete.rule"
+		},
+		{
+			"file" : "/home/pxg/PetPS/Cityhash-prefix/src/Cityhash-stamp/Cityhash-build.rule"
+		},
+		{
+			"file" : "/home/pxg/PetPS/Cityhash-prefix/src/Cityhash-stamp/Cityhash-configure.rule"
+		},
+		{
+			"file" : "/home/pxg/PetPS/Cityhash-prefix/src/Cityhash-stamp/Cityhash-download.rule"
+		},
+		{
+			"file" : "/home/pxg/PetPS/Cityhash-prefix/src/Cityhash-stamp/Cityhash-install.rule"
+		},
+		{
+			"file" : "/home/pxg/PetPS/Cityhash-prefix/src/Cityhash-stamp/Cityhash-mkdir.rule"
+		},
+		{
+			"file" : "/home/pxg/PetPS/Cityhash-prefix/src/Cityhash-stamp/Cityhash-patch.rule"
+		},
+		{
+			"file" : "/home/pxg/PetPS/Cityhash-prefix/src/Cityhash-stamp/Cityhash-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"Cityhash"
+		],
+		"name" : "Cityhash"
+	}
+}

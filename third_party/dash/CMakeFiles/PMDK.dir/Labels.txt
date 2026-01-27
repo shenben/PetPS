@@ -1,0 +1,13 @@
+# Target labels
+ PMDK
+# Source files and their labels
+/home/pxg/PetPS/third_party/dash/CMakeFiles/PMDK
+/home/pxg/PetPS/third_party/dash/CMakeFiles/PMDK.rule
+/home/pxg/PetPS/third_party/dash/CMakeFiles/PMDK-complete.rule
+/home/pxg/PetPS/third_party/dash/third_party/pmdk/src/PMDK-stamp/PMDK-build.rule
+/home/pxg/PetPS/third_party/dash/third_party/pmdk/src/PMDK-stamp/PMDK-configure.rule
+/home/pxg/PetPS/third_party/dash/third_party/pmdk/src/PMDK-stamp/PMDK-download.rule
+/home/pxg/PetPS/third_party/dash/third_party/pmdk/src/PMDK-stamp/PMDK-install.rule
+/home/pxg/PetPS/third_party/dash/third_party/pmdk/src/PMDK-stamp/PMDK-mkdir.rule
+/home/pxg/PetPS/third_party/dash/third_party/pmdk/src/PMDK-stamp/PMDK-patch.rule
+/home/pxg/PetPS/third_party/dash/third_party/pmdk/src/PMDK-stamp/PMDK-update.rule

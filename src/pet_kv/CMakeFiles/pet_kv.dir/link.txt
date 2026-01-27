@@ -1,0 +1,2 @@
+/usr/bin/ar qc ../../lib/libpet_kv.a CMakeFiles/pet_kv.dir/pet_kv.cc.o
+/usr/bin/ranlib ../../lib/libpet_kv.a

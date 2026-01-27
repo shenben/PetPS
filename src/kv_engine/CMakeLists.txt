@@ -19,18 +19,26 @@ if(USE_PMKV MATCHES "ON")
   target_link_libraries(kv_engine INTERFACE ${LIBPMEMKV_LIBRARIES})
 endif()
 
-target_link_libraries(
-  kv_engine
-  INTERFACE dash_hash pet_kv PMHashPCLHT PMHashLevel PMHashClevel
-            PMHashCCEHVM)
+if(USE_PMEM)
+  target_link_libraries(
+    kv_engine
+    INTERFACE dash_hash pet_kv PMHashPCLHT PMHashLevel PMHashClevel
+              PMHashCCEHVM)
+else()
+  target_link_libraries(
+    kv_engine
+    INTERFACE pet_kv)
+endif()
 
 target_sources(
   kv_engine INTERFACE ${PROJECT_SOURCE_DIR}/src/kv_engine/kv_engine_register.cc)
 # KV engine factory done
 
-add_executable(perf_kv_engine benchmark_kv_engine.cc ../ps/Postoffice.cc)
-target_link_libraries(perf_kv_engine PUBLIC pthread base kv_engine mayfly)
-target_link_libraries(perf_kv_engine PUBLIC OpenMP::OpenMP_CXX)
+if(USE_PMEM)
+  add_executable(perf_kv_engine benchmark_kv_engine.cc ../ps/Postoffice.cc)
+  target_link_libraries(perf_kv_engine PUBLIC pthread base kv_engine mayfly)
+  target_link_libraries(perf_kv_engine PUBLIC OpenMP::OpenMP_CXX)
+endif()
 
 add_executable(bench benchmark_zipf.cc)
 target_link_libraries(bench PUBLIC pthread base kv_engine)

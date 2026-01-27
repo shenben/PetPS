@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/pxg/PetPS/third_party/dash/CMakeFiles/PMDK"
+		},
+		{
+			"file" : "/home/pxg/PetPS/third_party/dash/CMakeFiles/PMDK.rule"
+		},
+		{
+			"file" : "/home/pxg/PetPS/third_party/dash/CMakeFiles/PMDK-complete.rule"
+		},
+		{
+			"file" : "/home/pxg/PetPS/third_party/dash/third_party/pmdk/src/PMDK-stamp/PMDK-build.rule"
+		},
+		{
+			"file" : "/home/pxg/PetPS/third_party/dash/third_party/pmdk/src/PMDK-stamp/PMDK-configure.rule"
+		},
+		{
+			"file" : "/home/pxg/PetPS/third_party/dash/third_party/pmdk/src/PMDK-stamp/PMDK-download.rule"
+		},
+		{
+			"file" : "/home/pxg/PetPS/third_party/dash/third_party/pmdk/src/PMDK-stamp/PMDK-install.rule"
+		},
+		{
+			"file" : "/home/pxg/PetPS/third_party/dash/third_party/pmdk/src/PMDK-stamp/PMDK-mkdir.rule"
+		},
+		{
+			"file" : "/home/pxg/PetPS/third_party/dash/third_party/pmdk/src/PMDK-stamp/PMDK-patch.rule"
+		},
+		{
+			"file" : "/home/pxg/PetPS/third_party/dash/third_party/pmdk/src/PMDK-stamp/PMDK-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"PMDK"
+		],
+		"name" : "PMDK"
+	}
+}

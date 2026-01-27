@@ -9,6 +9,8 @@
 DEFINE_int32(fake_kv_index_sleepns, 0, "sleep ns in the index part of FakeKV");
 
 class KVEngineFakeKV : public BaseKV {
+private:
+  static constexpr int valid_file_size = 4;
 public:
   KVEngineFakeKV(const BaseKVConfig &config)
       : BaseKV(config),
@@ -37,11 +39,15 @@ public:
   }
 
   void Get(const uint64_t key, std::string &value, unsigned t) override {
-    LOG(FATAL) << "not implement";
+    // Simple implementation - just copy from shared memory
+    char *data = shm_malloc_.GetMallocData(key);
+    value.assign(data, value_size_);
   }
   void Put(const uint64_t key, const std::string_view &value,
            unsigned t) override {
-    LOG(FATAL) << "not implement";
+    // Simple implementation - just copy to shared memory
+    char *data = shm_malloc_.GetMallocData(key);
+    memcpy(data, value.data(), value.size());
   }
   void BatchGet(base::ConstArray<uint64> keys,
                 std::vector<base::ConstArray<float>> *values,

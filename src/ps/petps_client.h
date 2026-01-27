@@ -26,6 +26,14 @@ public:
     LOG(INFO) << "dsm_->registerThread()";
     dsm_->registerThread();
     serverThreadIdsRoutedTo_ = GetServerThreadIDs();
+    char dbg[128];
+    snprintf(dbg, sizeof(dbg), "DEBUG: InitThread() got %zu server thread IDs: ", serverThreadIdsRoutedTo_.size());
+    ::write(STDERR_FILENO, dbg, strlen(dbg));
+    for (size_t i = 0; i < serverThreadIdsRoutedTo_.size() && i < 4; i++) {
+      snprintf(dbg, sizeof(dbg), "%d ", serverThreadIdsRoutedTo_[i]);
+      ::write(STDERR_FILENO, dbg, strlen(dbg));
+    }
+    ::write(STDERR_FILENO, "\n", 1);
   }
 
   int GetParameter(base::ConstArray<uint64_t> keys,

@@ -1,0 +1,2 @@
+/usr/bin/ar qc ../../lib/libwq_ps_client.a CMakeFiles/wq_ps_client.dir/petps_client.cc.o CMakeFiles/wq_ps_client.dir/config.cc.o CMakeFiles/wq_ps_client.dir/Postoffice.cc.o
+/usr/bin/ranlib ../../lib/libwq_ps_client.a

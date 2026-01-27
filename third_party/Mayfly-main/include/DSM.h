@@ -4,6 +4,8 @@
 #include <atomic>
 #include <iostream>
 
+#include <libmemcached/memcached.h>
+
 #include "BatchMeta.h"
 #include "Cache.h"
 #include "Common.h"
@@ -27,6 +29,7 @@ class DSM {
   uint16_t getMyThreadID() { return thread_id; }
   ThreadConnection *getThreadCon() { return iCon; }
   Directory *getDirAgent() { return dirAgent[0]; }
+  memcached_st *getMemc() { return keeper->getMemc(); }
 
   bool is_server() { return myNodeID == kv::kServerNodeID; }
 
@@ -199,6 +202,11 @@ class DSM {
 
   void rpc_call(RawMessage *m, uint16_t node_id, uint16_t t_id,
                 Slice extra_data = Slice::Void(), bool is_server = true) {
+    char dbg[128];
+    snprintf(dbg, sizeof(dbg), "DEBUG: rpc_call() myNodeID=%d, targetNodeID=%d, t_id=%d, type=%d\n",
+             myNodeID, node_id, t_id, m->type);
+    ::write(STDERR_FILENO, dbg, strlen(dbg));
+
     auto buffer = (RawMessage *)iCon->message->getSendPool();
 
     if (m->size() + 40 >= MESSAGE_SIZE) {
@@ -209,12 +217,19 @@ class DSM {
     buffer->node_id = myNodeID;
     buffer->t_id = thread_id;
 
+    snprintf(dbg, sizeof(dbg), "DEBUG: rpc_call() sending to remoteQPN=%u, ah=%p\n",
+             remoteInfo[node_id].appMessageQPN[t_id], remoteInfo[node_id].appAh[t_id]);
+    ::write(STDERR_FILENO, dbg, strlen(dbg));
+
     if (extra_data.s) {  // reduce a memcpy
       buffer->add_string(extra_data);
       iCon->sendMessage(buffer, node_id, t_id);
     } else {
       iCon->sendMessage(buffer, node_id, t_id);
     }
+
+    snprintf(dbg, sizeof(dbg), "DEBUG: rpc_call() message sent\n");
+    ::write(STDERR_FILENO, dbg, strlen(dbg));
 
     // buffer->print();
   }

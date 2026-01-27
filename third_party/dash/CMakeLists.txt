@@ -54,8 +54,10 @@ add_custom_target(
   compile_pmdk
   COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/../../tools/gen_dash_pmdk.sh")
 
-target_include_directories(dash_hash
-                           INTERFACE ${PMDK_PREFIX}/src/PMDK/src/include)
+if(USE_PMEM MATCHES "ON")
+  target_include_directories(dash_hash
+                             INTERFACE ${PMDK_PREFIX}/src/PMDK/src/include)
+endif()
 
 # #################### Epoch Reclaim ####################
 FetchContent_Declare(
@@ -66,8 +68,6 @@ if(NOT epoch_reclaimer_POPULATED)
   FetchContent_Populate(epoch_reclaimer)
   target_include_directories(dash_hash INTERFACE ${epoch_reclaimer_SOURCE_DIR})
 endif()
-
-option(USE_PMEM "enable persistent memory support" ON)
 
 set(libs_to_link pthread gflags Folly::folly -pthread)
 
@@ -84,14 +84,14 @@ if(USE_PMEM MATCHES "ON")
 endif()
 target_compile_options(dash_hash INTERFACE -msse -msse2 -msse3 -msse4 -mavx)
 
-add_dependencies(compile_pmdk PMDK)
-add_dependencies(dash_hash compile_pmdk)
+if(USE_PMEM MATCHES "ON")
+  add_dependencies(compile_pmdk PMDK)
+  add_dependencies(dash_hash compile_pmdk)
+endif()
 
 if(USE_PMEM MATCHES "ON")
   add_executable(test_pmem src/test_pmem.cpp)
   add_executable(example src/example.cpp)
   target_link_libraries(test_pmem PRIVATE dash_hash)
   target_link_libraries(example PRIVATE dash_hash)
-else()
-
 endif()

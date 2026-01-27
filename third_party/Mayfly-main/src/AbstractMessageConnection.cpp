@@ -9,7 +9,19 @@ AbstractMessageConnection::AbstractMessageConnection(
   assert(messageNR % kBatchCount == 0);
 
   // 128 is enough, as we use batch-signal for send queue
+#ifdef OFED_VERSION_5
+  struct ibv_cq_init_attr_ex attr;
+  memset(&attr, 0, sizeof(attr));
+  attr.cqe = 128;
+  attr.cq_context = NULL;
+  attr.channel = NULL;
+  attr.comp_vector = 0;
+  attr.comp_mask = 0;
+  auto send_cq_ex = ibv_create_cq_ex(ctx.ctx, &attr);
+  send_cq = send_cq_ex ? ibv_cq_ex_to_cq(send_cq_ex) : nullptr;
+#else
   send_cq = ibv_create_cq(ctx.ctx, 128, NULL, NULL, 0);
+#endif
   if (send_cq == nullptr) {
     printf("error create cq 1\n");
   }

@@ -38,7 +38,7 @@ constexpr NodeIDType kServerNodeID = 0;
 constexpr uint64_t kServerMemSize = 16; // GB
 constexpr uint64_t kDPUMemSize = 1;     // GB
 
-constexpr uint8_t kMaxNetThread = 120;
+constexpr uint8_t kMaxNetThread = 8;  // Support up to 8 threads
 constexpr uint8_t kMaxDPUThread = 8;
 
 

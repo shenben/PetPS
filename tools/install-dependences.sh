@@ -29,7 +29,7 @@ sudo apt-get install \
 sudo apt remove -y libgoogle-glog-dev
 
 cd ~
-rm -rf fmt
+# rm -rf fmt
 git clone https://github.com/fmtlib/fmt.git && 
 cd fmt
 git checkout 9.1.0
@@ -64,8 +64,8 @@ mkdir _build
 cd _build
 CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake ..
 make -j
-rm -rf /home/${USER}/folly-install
-make DESTDIR=/home/${USER}/folly-install install
+rm -rf /home/pxg/folly-install
+make DESTDIR=/home/pxg/folly-install install
 cd -
 
 

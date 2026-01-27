@@ -1,0 +1,2 @@
+/usr/bin/ar qc ../../lib/libbase_memory.a CMakeFiles/base_memory.dir/persist_malloc.cc.o CMakeFiles/base_memory.dir/shm_file.cc.o
+/usr/bin/ranlib ../../lib/libbase_memory.a

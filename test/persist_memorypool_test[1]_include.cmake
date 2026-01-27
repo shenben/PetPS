@@ -1,0 +1,5 @@
+if(EXISTS "/home/pxg/PetPS/test/persist_memorypool_test[1]_tests.cmake")
+  include("/home/pxg/PetPS/test/persist_memorypool_test[1]_tests.cmake")
+else()
+  add_test(persist_memorypool_test_NOT_BUILT persist_memorypool_test_NOT_BUILT)
+endif()

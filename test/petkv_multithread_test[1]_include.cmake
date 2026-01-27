@@ -1,0 +1,5 @@
+if(EXISTS "/home/pxg/PetPS/test/petkv_multithread_test[1]_tests.cmake")
+  include("/home/pxg/PetPS/test/petkv_multithread_test[1]_tests.cmake")
+else()
+  add_test(petkv_multithread_test_NOT_BUILT petkv_multithread_test_NOT_BUILT)
+endif()

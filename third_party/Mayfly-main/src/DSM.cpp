@@ -77,10 +77,29 @@ void DSM::registerThread() {
     return;
   }
 
+  char dbg[128];
+  snprintf(dbg, sizeof(dbg), "DEBUG: registerThread() fetch_add before, thread_id=%d\n", thread_id);
+  ::write(STDERR_FILENO, dbg, strlen(dbg));
+
   thread_id = appID.fetch_add(1);
+
+  snprintf(dbg, sizeof(dbg), "DEBUG: registerThread() fetch_add after, thread_id=%d\n", thread_id);
+  ::write(STDERR_FILENO, dbg, strlen(dbg));
+
+  snprintf(dbg, sizeof(dbg), "DEBUG: registerThread() accessing thCon[%d]\n", thread_id);
+  ::write(STDERR_FILENO, dbg, strlen(dbg));
   iCon = thCon[thread_id];
+
+  snprintf(dbg, sizeof(dbg), "DEBUG: registerThread() calling initRecv, iCon=%p\n", (void*)iCon);
+  ::write(STDERR_FILENO, dbg, strlen(dbg));
   iCon->message->initRecv();
+
+  snprintf(dbg, sizeof(dbg), "DEBUG: registerThread() calling initSend\n");
+  ::write(STDERR_FILENO, dbg, strlen(dbg));
   iCon->message->initSend();
+
+  snprintf(dbg, sizeof(dbg), "DEBUG: registerThread() done\n");
+  ::write(STDERR_FILENO, dbg, strlen(dbg));
 
   // iCon2 = thCon[kv::kMaxNetThread - 1 - thread_id];
   // assert(2 * thread_id + 1 <= kv::kMaxNetThread);

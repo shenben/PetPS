@@ -1,0 +1,2 @@
+/usr/bin/ar qc ../../lib/libPMHashCCEHVM.a CMakeFiles/PMHashCCEHVM.dir/hash/common/vmem.cpp.o CMakeFiles/PMHashCCEHVM.dir/hash/CCEH-vm/CCEH_MSB.cpp.o
+/usr/bin/ranlib ../../lib/libPMHashCCEHVM.a

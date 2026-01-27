@@ -357,12 +357,21 @@ bool rdmaWriteVector(ibv_qp *qp, const SourceList *source_list,
   }
 
   struct ibv_send_wr *wrBad;
-  if (ibv_post_send(qp, &wr[0], &wrBad) != 0) {
-    Debug::notifyError(
-        "Send with RDMA_WRITE(WITH_IMM) failed. rdmaWriteVector");
+  int post_send_ret = ibv_post_send(qp, &wr[0], &wrBad);
+  if (post_send_ret != 0) {
+    fprintf(stderr, "ERROR: RDMA_WRITE failed. ret=%d errno=%d qp_num=%d list_size=%d dest=0x%lx lkey=0x%x rkey=0x%x\n",
+        post_send_ret, errno, qp->qp_num, list_size, dest, lkey, remoteRKey);
+    char err_msg[256];
+    snprintf(err_msg, sizeof(err_msg),
+        "Send with RDMA_WRITE failed. rdmaWriteVector: ret=%d errno=%d qp_num=%d list_size=%d dest=0x%lx lkey=0x%x rkey=0x%x",
+        post_send_ret, errno, qp->qp_num, list_size, dest, lkey, remoteRKey);
+    Debug::notifyError(err_msg);
     assert(0);
     exit(-1);
     return false;
+  } else {
+    // Success - optionally log for debugging
+    fprintf(stderr, "DEBUG: rdmaWriteVector succeeded: qp_num=%d list_size=%d\n", qp->qp_num, list_size);
   }
   return true;
 }

@@ -1,0 +1,2 @@
+/usr/bin/ar qc ../../lib/libPMHashLevel.a CMakeFiles/PMHashLevel.dir/hash/common/vmem.cpp.o CMakeFiles/PMHashLevel.dir/hash/Level/Level_hashing.cpp.o
+/usr/bin/ranlib ../../lib/libPMHashLevel.a
