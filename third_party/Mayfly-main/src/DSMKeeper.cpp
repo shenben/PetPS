@@ -185,14 +185,17 @@ void DSMKeeper::barrier(const std::string &barrierKey, uint64_t k) {
   uint16_t total_participants = server_count + client_count;
 
   // Determine if I should initialize the barrier
-  // For k=1, only node 0 initializes and increments (first node does both)
-  // For k>1, only the last node increments (does NOT initialize, just final increment)
-  bool should_initialize = (k == 1 && this->getMyNodeID() == 0);
-  bool should_final_increment = (k > 1 && this->getMyNodeID() == total_participants - 1);
+  // The first server node (ID < server_count) should initialize
+  // This ensures proper initialization regardless of total participant count
+  bool am_server = (this->getMyNodeID() < server_count);
+  bool am_first_server = am_server && this->getMyNodeID() == 0;
+
+  bool should_initialize = (am_first_server);
+  bool should_final_increment = (this->getMyNodeID() == total_participants - 1);
 
   if (should_initialize) {
-    snprintf(dbg, sizeof(dbg), "DEBUG: barrier(%s) initializing to 0 and incrementing (myNodeID=%d, k=%lu)\n",
-             barrierKey.c_str(), getMyNodeID(), k);
+    snprintf(dbg, sizeof(dbg), "DEBUG: barrier(%s) initializing to 0 and incrementing (myNodeID=%d, server_count=%u, client_count=%u)\n",
+             barrierKey.c_str(), getMyNodeID(), server_count, client_count);
     ::write(STDERR_FILENO, dbg, strlen(dbg));
     memSet(key.c_str(), key.size(), "0", 1);
     snprintf(dbg, sizeof(dbg), "DEBUG: barrier(%s) initialized by node %d\n", barrierKey.c_str(), getMyNodeID());
