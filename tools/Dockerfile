@@ -186,18 +186,17 @@ RUN apt-get update && apt install -y software-properties-common
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test
 RUN apt-get update && apt install -y gcc-11 g++-11
 
-# Folly - build standalone (patch CMakeLists.txt to remove Facebook-specific dependencies)
-RUN rm -rf /tmp/folly && \
-cd /tmp && git clone https://github.com/facebook/folly.git && cd folly && \
-git checkout v2022.01.17.00 && \
-sed -i 's|include(FBBuildOptions)||g' CMakeLists.txt && \
-sed -i 's|fb_activate_static_library_option||g' CMakeLists.txt && \
-rm -rf build && mkdir build && cd build && \
-cmake .. -DCMAKE_C_COMPILER=/usr/bin/gcc-11 -DCMAKE_CXX_COMPILER=/usr/bin/g++-11 \
-        -DFOLLY_BUILD_SHARED=ON \
-        -DFOLLY_USE_STATIC_LIB=OFF && \
-make -j$(nproc) && \
-make install
+# Folly - install from GitHub release (pre-built)
+RUN apt-get update && apt install -y wget && \
+    cd /tmp && wget https://github.com/facebook/folly/releases/download/v2022.01.17.00/folly-v2022.01.17.00.tar.gz && \
+    tar xzf folly-v2022.01.17.00.tar.gz && \
+    cd folly-v2022.01.17.00 && \
+    mkdir build && cd build && \
+    cmake .. -DCMAKE_C_COMPILER=/usr/bin/gcc-11 -DCMAKE_CXX_COMPILER=/usr/bin/g++-11 \
+             -DFOLLY_BUILD_SHARED=ON \
+             -DFOLLY_USE_STATIC_LIB=OFF && \
+    make -j$(nproc) && \
+    make install
 
 # tbb (using Ubuntu package instead of Intel one)
 RUN apt-get update && apt install -y libtbb-dev
