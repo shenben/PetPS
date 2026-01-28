@@ -67,6 +67,21 @@ RUN cd /tmp && git clone https://github.com/fmtlib/fmt.git && cd fmt && git chec
 mkdir _build && cd _build && cmake .. && make -j$(nproc) && \
 make install
 
+# libsodium (required by Folly)
+RUN apt-get update -y && apt install -y libsodium-dev
+
+# double-conversion (required by Folly)
+RUN apt-get update -y && apt install -y libdouble-conversion-dev
+
+# Folly
+RUN rm -rf /tmp/folly && \
+cd /tmp && git clone https://github.com/facebook/folly.git && cd folly && \
+git checkout v2022.01.17.00 && \
+rm -rf build && mkdir build && cd build && \
+cmake .. -DCMAKE_C_COMPILER=gcc-11 -DCMAKE_CXX_COMPILER=g++-11 && \
+make -j$(nproc) && \
+make install
+
 # PB
 RUN apt-get update -y && \
 DEBIAN_FRONTEND=noninteractive apt-get install -y libtool autoconf
@@ -176,12 +191,12 @@ RUN git clone --branch v"${RDKAFKA_VER}" --depth 1 https://github.com/edenhill/l
     cd .. && \
     rm -rf rdkafka
 
+RUN apt-get update && apt install -y software-properties-common
+RUN add-apt-repository ppa:ubuntu-toolchain-r/test
 RUN apt-get update && apt install -y gcc-11 g++-11
 
-# tbb
-RUN cd /tmp && \
-wget https://registrationcenter-download.intel.com/akdlm/irc_nas/18728/l_tbb_oneapi_p_2021.6.0.835_offline.sh && \
-sh l_tbb_oneapi_p_2021.6.0.835_offline.sh -a -s --eula accept
+# tbb (using Ubuntu package instead of Intel one)
+RUN apt-get update && apt install -y libtbb-dev
 
 RUN mv /usr/bin/gcc /usr/bin/gcc.back
 RUN mv /usr/bin/g++ /usr/bin/g++.back
