@@ -186,14 +186,8 @@ RUN apt-get update && apt install -y software-properties-common
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test
 RUN apt-get update && apt install -y gcc-11 g++-11
 
-# Folly (requires gcc-11)
-RUN rm -rf /tmp/folly && \
-cd /tmp && git clone https://github.com/facebook/folly.git && cd folly && \
-git checkout v2022.01.17.00 && \
-rm -rf build && mkdir build && cd build && \
-cmake .. -DCMAKE_C_COMPILER=/usr/bin/gcc-11 -DCMAKE_CXX_COMPILER=/usr/bin/g++-11 && \
-make -j$(nproc) && \
-make install
+# Folly - install from Ubuntu packages (standalone build)
+RUN apt-get update && apt install -y libfolly-dev
 
 # tbb (using Ubuntu package instead of Intel one)
 RUN apt-get update && apt install -y libtbb-dev
