@@ -154,6 +154,10 @@ void DSMKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMeta) {
     struct ibv_ah_attr ahAttr;
     fillAhAttr(&ahAttr, remoteMeta->lid, remoteMeta->gid, &thCon[k]->ctx);
     info.appAh[k] = ibv_create_ah(thCon[k]->ctx.pd, &ahAttr);
+    char ah_msg[128];
+    snprintf(ah_msg, sizeof(ah_msg), "DEBUG: setDataFromRemote[%d] created appAh[%d]=%p for lid=%u\n",
+             remoteID, k, (void*)info.appAh[k], remoteMeta->lid);
+    ::write(STDERR_FILENO, ah_msg, strlen(ah_msg));
     if (!info.appAh[k]) {
       char err[128];
       snprintf(err, sizeof(err), "ERROR: ibv_create_ah failed for appAh[%d], errno=%d\n", k, errno);
@@ -193,6 +197,11 @@ void DSMKeeper::barrier(const std::string &barrierKey, uint64_t k) {
   bool should_initialize = (am_first_server);
   bool should_final_increment = (this->getMyNodeID() == total_participants - 1);
 
+  snprintf(dbg, sizeof(dbg), "DEBUG: barrier(%s) myNodeID=%d, server_count=%u, client_count=%u, total=%u, init=%d, final=%d\n",
+           barrierKey.c_str(), getMyNodeID(), server_count, client_count, total_participants,
+           should_initialize, should_final_increment);
+  ::write(STDERR_FILENO, dbg, strlen(dbg));
+
   if (should_initialize) {
     snprintf(dbg, sizeof(dbg), "DEBUG: barrier(%s) initializing to 0 and incrementing (myNodeID=%d, server_count=%u, client_count=%u)\n",
              barrierKey.c_str(), getMyNodeID(), server_count, client_count);
@@ -206,11 +215,16 @@ void DSMKeeper::barrier(const std::string &barrierKey, uint64_t k) {
     snprintf(dbg, sizeof(dbg), "DEBUG: barrier(%s) after memFetchAndAdd, myNodeID=%d, value=%lu\n", barrierKey.c_str(), getMyNodeID(), new_val);
     ::write(STDERR_FILENO, dbg, strlen(dbg));
 
-    // Wait for all other nodes to reach k
+    // Wait for all other nodes to reach k (log every 5 seconds)
+    int log_counter = 0;
     while (true) {
       uint64_t v = std::stoull(memGet(key.c_str(), key.size()));
-      snprintf(dbg, sizeof(dbg), "DEBUG: barrier(%s) checking: v=%lu, k=%lu\n", barrierKey.c_str(), v, k);
-      ::write(STDERR_FILENO, dbg, strlen(dbg));
+      log_counter++;
+      if (log_counter >= 500) {  // Every 5 seconds (500 * 10000us = 5s)
+        log_counter = 0;
+        snprintf(dbg, sizeof(dbg), "DEBUG: barrier(%s) checking: v=%lu, k=%lu\n", barrierKey.c_str(), v, k);
+        ::write(STDERR_FILENO, dbg, strlen(dbg));
+      }
       if (v == k) {
         ::write(STDERR_FILENO, "DEBUG: barrier passed!\n", 22);
         return;
@@ -246,11 +260,16 @@ void DSMKeeper::barrier(const std::string &barrierKey, uint64_t k) {
     snprintf(dbg, sizeof(dbg), "DEBUG: barrier(%s) after memFetchAndAdd, myNodeID=%d, value=%lu\n", barrierKey.c_str(), getMyNodeID(), new_val);
     ::write(STDERR_FILENO, dbg, strlen(dbg));
 
-    // Wait for the barrier to be fully reached
+    // Wait for the barrier to be fully reached (log every 5 seconds)
+    int log_counter = 0;
     while (true) {
       uint64_t v = std::stoull(memGet(key.c_str(), key.size()));
-      snprintf(dbg, sizeof(dbg), "DEBUG: barrier(%s) checking: v=%lu, k=%lu\n", barrierKey.c_str(), v, k);
-      ::write(STDERR_FILENO, dbg, strlen(dbg));
+      log_counter++;
+      if (log_counter >= 500) {  // Every 5 seconds (500 * 10000us = 5s)
+        log_counter = 0;
+        snprintf(dbg, sizeof(dbg), "DEBUG: barrier(%s) checking: v=%lu, k=%lu\n", barrierKey.c_str(), v, k);
+        ::write(STDERR_FILENO, dbg, strlen(dbg));
+      }
       if (v == k) {
         ::write(STDERR_FILENO, "DEBUG: barrier passed!\n", 22);
         return;
@@ -258,7 +277,7 @@ void DSMKeeper::barrier(const std::string &barrierKey, uint64_t k) {
       usleep(10000);
     }
   } else {
-    // For other nodes (not initializer and not last node): wait and pass
+    // For other nodes (not initializer and not last node): wait, increment, and pass
     snprintf(dbg, sizeof(dbg), "DEBUG: barrier(%s) waiting for initialization by node 0\n",
              barrierKey.c_str());
     ::write(STDERR_FILENO, dbg, strlen(dbg));
@@ -270,14 +289,33 @@ void DSMKeeper::barrier(const std::string &barrierKey, uint64_t k) {
       }
       usleep(1000);
     }
-    snprintf(dbg, sizeof(dbg), "DEBUG: barrier(%s) initialization detected\n", barrierKey.c_str());
+    snprintf(dbg, sizeof(dbg), "DEBUG: barrier(%s) initialization detected, doing increment\n", barrierKey.c_str());
     ::write(STDERR_FILENO, dbg, strlen(dbg));
 
-    // Wait until barrier is reached
+    // Wait until initializer has incremented (value >= 1)
     while (true) {
       uint64_t v = std::stoull(memGet(key.c_str(), key.size()));
-      snprintf(dbg, sizeof(dbg), "DEBUG: barrier(%s) checking: v=%lu, k=%lu\n", barrierKey.c_str(), v, k);
-      ::write(STDERR_FILENO, dbg, strlen(dbg));
+      if (v >= 1) {
+        break;
+      }
+      usleep(1000);
+    }
+
+    // Increment the barrier
+    uint64_t new_val = memFetchAndAdd(key.c_str(), key.size());
+    snprintf(dbg, sizeof(dbg), "DEBUG: barrier(%s) after memFetchAndAdd, myNodeID=%d, value=%lu\n", barrierKey.c_str(), getMyNodeID(), new_val);
+    ::write(STDERR_FILENO, dbg, strlen(dbg));
+
+    // Wait until barrier is reached (log every 5 seconds)
+    int log_counter = 0;
+    while (true) {
+      uint64_t v = std::stoull(memGet(key.c_str(), key.size()));
+      log_counter++;
+      if (log_counter >= 500) {  // Every 5 seconds (500 * 10000us = 5s)
+        log_counter = 0;
+        snprintf(dbg, sizeof(dbg), "DEBUG: barrier(%s) checking: v=%lu, k=%lu\n", barrierKey.c_str(), v, k);
+        ::write(STDERR_FILENO, dbg, strlen(dbg));
+      }
       if (v == k) {
         ::write(STDERR_FILENO, "DEBUG: barrier passed!\n", 22);
         return;

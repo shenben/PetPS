@@ -134,22 +134,28 @@ void Keeper::serverEnter(int globalID) {
     uint32_t flags;
     memcached_return rc;
     uint32_t serverNum = 0;
+    fprintf(stderr, "DEBUG: client reading serverNum key\n");
     {
       char *serverNumStr = memcached_get(memc, SERVER_NUM_KEY,
                                          strlen(SERVER_NUM_KEY), &l, &flags, &rc);
+      fprintf(stderr, "DEBUG: client got serverNum response, rc=%s\n", memcached_strerror(memc, rc));
       if (rc == MEMCACHED_SUCCESS && serverNumStr) {
         serverNum = atoi(serverNumStr);
+        fprintf(stderr, "DEBUG: client parsed serverNum=%u\n", serverNum);
         free(serverNumStr);
       }
     }
 
     // Get the client count and increment to get our index
     uint32_t curClientNum = 0;
+    fprintf(stderr, "DEBUG: client reading clientNum key\n");
     {
       char *clientNumStr = memcached_get(memc, CLIENT_NUM_KEY,
                                          strlen(CLIENT_NUM_KEY), &l, &flags, &rc);
+      fprintf(stderr, "DEBUG: client got clientNum response, rc=%s\n", memcached_strerror(memc, rc));
       if (rc == MEMCACHED_SUCCESS && clientNumStr) {
         curClientNum = atoi(clientNumStr);
+        fprintf(stderr, "DEBUG: client parsed curClientNum=%u\n", curClientNum);
         free(clientNumStr);
       }
     }
@@ -240,25 +246,27 @@ void Keeper::serverConnect() {
           is_server, serverNum, clientNum, myNodeID, maxServer);
 
   if (is_server) {
-    // I am a server: connect to other servers and all clients
-    // Use maxServer (configured total servers) instead of serverNum (current registration)
-    // to ensure we connect to all expected servers
-    for (size_t k = curServer; k < maxServer; ++k) {
+    // I am a server: connect to other servers only (not clients)
+    // Clients will connect to servers, not the other way around
+    // Use serverNum (actual server count) instead of maxServer to avoid connecting to client nodes
+    for (size_t k = curServer; k < serverNum; ++k) {
       if (k != myNodeID) {
         connectNode(k);
-        fprintf(stderr, "DEBUG: I connect to server %zu (maxServer=%u)\n", k, maxServer);
+        fprintf(stderr, "DEBUG: I connect to server %zu (serverNum=%u)\n", k, serverNum);
       }
     }
     curServer = maxServer;
 
-    // Connect to clients (client IDs start from serverNum)
-    // Client i has ID = serverNum + i
+    // Connect to clients (client IDs start from configured_server_count)
+    // Use maxServer - expectedClientNR to get the configured server count
+    // Client i has ID = configured_server_count + i
+    uint16_t serverCount = maxServer - expectedClientNR;
     uint32_t totalClients = clientNum;  // Current number of clients
     for (uint32_t i = 0; i < totalClients; i++) {
-      uint16_t clientID = serverNum + i;
+      uint16_t clientID = serverCount + i;
       if (clientID != myNodeID) {  // Should always be true for servers
         connectNode(clientID);
-        fprintf(stderr, "DEBUG: I connect to client %u (clientIndex=%u)\n", clientID, i);
+        fprintf(stderr, "DEBUG: I connect to client %u (clientIndex=%u, serverCount=%u)\n", clientID, i, serverCount);
       }
     }
 
@@ -269,6 +277,7 @@ void Keeper::serverConnect() {
     fprintf(stderr, "DEBUG: Starting late client polling, initial clientNum=%u, expectedClients=%u\n", clientNum, expectedClients);
 
     // Wait indefinitely for all expected clients
+    int log_counter = 0;
     while (lastClientNum < expectedClients) {
       usleep(100000);  // 100ms
 
@@ -282,19 +291,31 @@ void Keeper::serverConnect() {
         if (newClientNum > lastClientNum) {
           fprintf(stderr, "DEBUG: New clients detected! last=%u, new=%u\n", lastClientNum, newClientNum);
           // Connect to new clients
+          // Use maxServer - expectedClientNR to get the configured server count
+          // The client's global ID is: configured_server_count + clientIndex
+          uint16_t serverCount = maxServer - expectedClientNR;
           for (uint32_t i = lastClientNum; i < newClientNum; i++) {
-            uint16_t clientID = serverNum + i;
+            uint16_t clientID = serverCount + i;
             if (clientID != myNodeID) {
               connectNode(clientID);
-              fprintf(stderr, "DEBUG: Late connect to client %u (clientIndex=%u)\n", clientID, i);
+              fprintf(stderr, "DEBUG: Late connect to client %u (clientIndex=%u, serverCount=%u, maxServer=%u)\n", clientID, i, serverCount, maxServer);
             }
           }
+          // Give time for RDMA connections to be fully established
+          // This ensures address handles are ready before RPCs are sent
+          fprintf(stderr, "DEBUG: Waiting for RDMA connections to stabilize...\n");
+          usleep(500000);  // 500ms sleep
+          fprintf(stderr, "DEBUG: RDMA connections should be ready\n");
           lastClientNum = newClientNum;
         }
       }
-      // Log progress periodically
-      if (lastClientNum < expectedClients) {
-        fprintf(stderr, "DEBUG: Waiting for clients... %u/%u connected\n", lastClientNum, expectedClients);
+      // Log progress every 5 seconds (every 50 iterations)
+      log_counter++;
+      if (log_counter >= 50) {
+        log_counter = 0;
+        if (lastClientNum < expectedClients) {
+          fprintf(stderr, "DEBUG: Waiting for clients... %u/%u connected\n", lastClientNum, expectedClients);
+        }
       }
     }
     fprintf(stderr, "DEBUG: All %u clients connected\n", expectedClients);
@@ -349,7 +370,8 @@ char *Keeper::memGet(const char *key, uint32_t klen, size_t *v_size) {
       break;
     }
     retry_count++;
-    if (retry_count % 1000 == 0) {
+    // Log every 10000 retries (~4 seconds) instead of every 1000 to reduce log spam
+    if (retry_count % 10000 == 0) {
       fprintf(stderr, "DEBUG: memGet retry %d for key '%s', error: %s\n", retry_count, key, memcached_strerror(memc, rc));
     }
     usleep(400 * myNodeID);

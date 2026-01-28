@@ -139,12 +139,18 @@ class BenchmarkClientCommon {
       char dbg[64];
       snprintf(dbg, sizeof(dbg), "DEBUG: Checking thread %d, tp=%ld\n", i, tp[i][0]);
       ::write(STDERR_FILENO, dbg, strlen(dbg));
+      int wait_count = 0;
       while (tp[i][0] != 0) {
-        char warn[64];
-        snprintf(warn, sizeof(warn), "DEBUG: Waiting for thread %d, tp=%ld\n", i, tp[i][0]);
-        ::write(STDERR_FILENO, warn, strlen(warn));
-        FB_LOG_EVERY_MS(WARNING, 5000)
-            << "main client thread, stalled for waiting thread " << i;
+        wait_count++;
+        // Only log every 5 seconds to avoid log spam
+        if (wait_count % 500 == 0) {
+          char warn[64];
+          snprintf(warn, sizeof(warn), "DEBUG: Waiting for thread %d, tp=%ld\n", i, tp[i][0]);
+          ::write(STDERR_FILENO, warn, strlen(warn));
+          FB_LOG_EVERY_MS(WARNING, 5000)
+              << "main client thread, stalled for waiting thread " << i;
+        }
+        usleep(10000);  // 10ms
       }
       char ready[32];
       snprintf(ready, sizeof(ready), "DEBUG: Thread %d ready\n", i);
@@ -157,6 +163,10 @@ class BenchmarkClientCommon {
     ::write(STDERR_FILENO, "DEBUG: Clients start barrier passed\n", 36);
     start_flag_ = true;
     ::write(STDERR_FILENO, "DEBUG: Starting main benchmark loop\n", 35);
+
+    // Give client threads time to exit their wait loops and be ready
+    // to receive RPCs from servers before starting the benchmark
+    usleep(200000);  // 200ms sleep to allow client threads to start processing
 
     while (true) {
       clock_gettime(CLOCK_REALTIME, &s);

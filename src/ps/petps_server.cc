@@ -104,22 +104,19 @@ class RDMARpcParameterServiceImpl {
     ::write(STDERR_FILENO, "DEBUG: LOG(INFO) done\n", 21);
 
     // FIRST: Signal all polling threads to proceed with registerThread()
-    // This must be done BEFORE waiting on wait_count
+    // Using atomic flag with spin-wait in threads (more reliable than condition variable)
     {
       std::lock_guard<std::mutex> lock(barrier_mutex_);
       barrier_ready_ = true;
-      ::write(STDERR_FILENO, "DEBUG: Notifying all threads to register\n", 40);
+      ::write(STDERR_FILENO, "DEBUG: barrier_ready_ set to true\n", 32);
     }
-    barrier_cv_.notify_all();
-    ::write(STDERR_FILENO, "DEBUG: All threads notified\n", 27);
 
     // Wait for all polling threads to call registerThread()
-    // We need to wait for thread_count_ threads to register
-    int expected_count = thread_count_;  // polling threads only (main thread registers after)
+    // Use a simple sleep to give threads time to register
     int wait_count = 0;
-    while (wait_count < 3) {  // Reduced wait time
+    while (wait_count < thread_count_ + 2) {  // Wait for all threads + buffer
       char status_msg[128];
-      snprintf(status_msg, sizeof(status_msg), "DEBUG: WaitForBarrier() wait_count=%d\n", wait_count);
+      snprintf(status_msg, sizeof(status_msg), "DEBUG: WaitForBarrier() wait_count=%d/%d\n", wait_count, thread_count_ + 1);
       ::write(STDERR_FILENO, status_msg, strlen(status_msg));
       sleep(1);
       wait_count++;
@@ -260,54 +257,37 @@ class RDMARpcParameterServiceImpl {
 
   void PollingThread(int thread_id) {
     auto_bind_core(0);
-    ::write(STDERR_FILENO, "DEBUG: PollingThread entered\n", 28);
+    char dbg_msg[128];
+    snprintf(dbg_msg, sizeof(dbg_msg), "DEBUG: PollingThread[%d] entered, waiting for barrier_ready\n", thread_id);
+    ::write(STDERR_FILENO, dbg_msg, strlen(dbg_msg));
 
     // Wait for barrier to be ready before registering
-    // This ensures all threads register after WaitForBarrier() starts
-    {
-      std::unique_lock<std::mutex> lock(barrier_mutex_);
-      barrier_cv_.wait(lock, [this] { return barrier_ready_; });
+    // Use spin-wait with yield to avoid missing the signal
+    while (!barrier_ready_) {
+      sched_yield();  // Yield to other threads
     }
-    ::write(STDERR_FILENO, "DEBUG: PollingThread proceeding to register\n", 44);
+    snprintf(dbg_msg, sizeof(dbg_msg), "DEBUG: PollingThread[%d] barrier_ready detected, proceeding to register\n", thread_id);
+    ::write(STDERR_FILENO, dbg_msg, strlen(dbg_msg));
 
     dsm_->registerThread();
     ::write(STDERR_FILENO, "DEBUG: registerThread done\n", 26);
-    char dbg_msg[128];
     snprintf(dbg_msg, sizeof(dbg_msg), "DEBUG: PollingThread[%d] started, myNodeID=%d\n", thread_id, dsm_->getMyNodeID());
     ::write(STDERR_FILENO, dbg_msg, strlen(dbg_msg));
     auto msg = RawMessage::get_new_msg();
 
-    int poll_count = 0;
-    int last_poll_msg = 0;
     while (1) {
       msg->clear();
       uint64_t wr_id = 0;
       RawMessage *recv;
       do {
         recv = dsm_->rpc_fast_wait(&wr_id);
-        poll_count++;
-        // Print poll status more frequently
-        if (poll_count - last_poll_msg >= 1000) {
-          snprintf(dbg_msg, sizeof(dbg_msg), "DEBUG: PollingThread[%d] poll_count=%d, recv=%p, wr_id=%lu, qp_num=%d\n",
-                   thread_id, poll_count, recv, wr_id, dsm_->getThreadCon()->message->getQPN());
-          ::write(STDERR_FILENO, dbg_msg, strlen(dbg_msg));
-          last_poll_msg = poll_count;
-        }
         if (recv == nullptr && wr_id == petps::WR_ID_SG_GET) {
-          // FB_LOG_EVERY_MS(ERROR, 1000)
-          //     << "MaxPendingEpochNumPerThread = "
-          //     << epoch_manager_->MaxPendingEpochNumPerThread();
           epoch_manager_->UnProtect();
         }
       } while (nullptr == recv);
 
       snprintf(dbg_msg, sizeof(dbg_msg), "DEBUG: PollingThread[%d] received msg type=%d\n", thread_id, recv->type);
       ::write(STDERR_FILENO, dbg_msg, strlen(dbg_msg));
-
-      char type_msg[128];
-      snprintf(type_msg, sizeof(type_msg), "DEBUG: PollingThread[%d] processing msg type=%d\n",
-               thread_id, recv->type);
-      ::write(STDERR_FILENO, type_msg, strlen(type_msg));
 
       if (recv->type == GET_SERVER_THREADIDS) {
         LOG(INFO) << "RPC: GET_SERVER_THREADIDS received";

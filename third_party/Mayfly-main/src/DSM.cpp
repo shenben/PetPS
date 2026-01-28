@@ -67,7 +67,19 @@ DSM::DSM(const DSMConfig &conf, int globalID_xmh)
     }
   }
 
-  keeper->barrier("DSM-init", conf.machineNR);
+  // Only call barrier if skip_barrier is false
+  printf("DEBUG: DSM constructor: skip_barrier=%d, is_client=%d, machineNR=%u\n",
+         conf.skip_barrier, conf.is_client, conf.machineNR);
+  fflush(stdout);
+
+  if (!conf.skip_barrier) {
+    printf("DEBUG: DSM constructor calling barrier (skip_barrier=false)\n");
+    fflush(stdout);
+    keeper->barrier("DSM-init", conf.machineNR);
+  } else {
+    printf("DEBUG: DSM constructor skipping barrier (skip_barrier=true)\n");
+    fflush(stdout);
+  }
 }
 
 DSM::~DSM() {}
