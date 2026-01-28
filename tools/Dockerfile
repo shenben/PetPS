@@ -14,7 +14,7 @@ RUN apt-get update -y && \
 DEBIAN_FRONTEND=noninteractive apt install -y ca-certificates
 
 # COPY ubuntu22.04.apt /etc/apt/sources.list
-COPY ubuntu18.04.apt /etc/apt/sources.list
+# COPY ubuntu18.04.apt /etc/apt/sources.list
 
 RUN apt-get update -y && \
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
