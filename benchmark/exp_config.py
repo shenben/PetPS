@@ -9,16 +9,16 @@ import concurrent.futures
 
 ALL_SERVERS_INCLUDING_NOT_USED = [
     # client
-    '10.0.2.110',
+    '10.113.164.247',
     # PS
-    '10.0.2.130',
+    '10.113.164.246',
 ]
 # Each element has the format (IP, NUMA_ID)
 SINGLE_PS_SERVERS = [
-    ('10.0.2.130', 0),
+    ('10.113.164.246', 0),
 ]
 SINGLE_CLIENT_SERVERS = [
-    ('10.0.2.110', 0),
+    ('10.113.164.247', 0),
 ]
 
 PRELOAD_WHEN_INIT = False
