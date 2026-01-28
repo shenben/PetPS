@@ -65,6 +65,11 @@ public:
   }
 
   std::pair<uint64_t, uint64_t> RegisterPMAddr() const override {
+    // Check if PMem is available, if not return (0,0) to use huge pages fallback
+    if (!std::filesystem::exists("/dev/dax0.0")) {
+      LOG(INFO) << "PMem /dev/dax0.0 not available, using huge pages fallback";
+      return std::make_pair<uint64_t, uint64_t>(0, 0);
+    }
     return base::PMMmapRegisterCenter::GetInstance()->ForRDMAMemoryRegion();
   }
 

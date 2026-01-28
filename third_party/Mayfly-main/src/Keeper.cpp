@@ -81,12 +81,21 @@ void Keeper::serverEnter(int globalID) {
 
   if (globalID == -1) {
     // I am a server
-    // Initialize serverNum key if it doesn't exist (server only)
+    // Initialize serverNum key ONLY if it doesn't exist (server only)
+    // Don't overwrite if another server already initialized it
     {
-      memcached_return rc_init;
-      rc_init = memcached_set(memc, SERVER_NUM_KEY, strlen(SERVER_NUM_KEY),
-                              "0", 1, (time_t)0, (uint32_t)0);
-      fprintf(stderr, "DEBUG: Initialized %s, rc=%s\n", SERVER_NUM_KEY, memcached_strerror(memc, rc_init));
+      uint32_t flags;
+      size_t value_len;
+      char* existing_value = memcached_get(memc, SERVER_NUM_KEY, strlen(SERVER_NUM_KEY), &value_len, &flags, &rc);
+      if (existing_value) {
+        fprintf(stderr, "DEBUG: %s already exists with value length=%zu, not resetting\n", SERVER_NUM_KEY, value_len);
+        free(existing_value);
+      } else {
+        memcached_return rc_init;
+        rc_init = memcached_set(memc, SERVER_NUM_KEY, strlen(SERVER_NUM_KEY),
+                                "0", 1, (time_t)0, (uint32_t)0);
+        fprintf(stderr, "DEBUG: Initialized %s, rc=%s\n", SERVER_NUM_KEY, memcached_strerror(memc, rc_init));
+      }
     }
 
     fprintf(stderr, "DEBUG: serverEnter() for server (globalID=-1)\n");
@@ -232,14 +241,15 @@ void Keeper::serverConnect() {
 
   if (is_server) {
     // I am a server: connect to other servers and all clients
-    // Connect to other servers (k < serverNum, k != myNodeID)
-    for (size_t k = curServer; k < serverNum; ++k) {
+    // Use maxServer (configured total servers) instead of serverNum (current registration)
+    // to ensure we connect to all expected servers
+    for (size_t k = curServer; k < maxServer; ++k) {
       if (k != myNodeID) {
         connectNode(k);
-        fprintf(stderr, "DEBUG: I connect to server %zu\n", k);
+        fprintf(stderr, "DEBUG: I connect to server %zu (maxServer=%u)\n", k, maxServer);
       }
     }
-    curServer = serverNum;
+    curServer = maxServer;
 
     // Connect to clients (client IDs start from serverNum)
     // Client i has ID = serverNum + i
