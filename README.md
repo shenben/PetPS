@@ -87,8 +87,14 @@ rm -rf ~/folly-install && make DESTDIR=~/folly-install install
 
 **Build Cityhash:**
 ```bash
-# Cityhash source is already downloaded to ~/PetPS/build/cityhash/
-cd ~/PetPS/build/cityhash/cityhash-master
+# Download Cityhash from Google (official source)
+cd ~/PetPS/build
+rm -rf cityhash && mkdir cityhash && cd cityhash
+curl -L -o cityhash.tar.gz https://github.com/google/cityhash/archive/refs/heads/master.tar.gz
+tar -xzf cityhash.tar.gz
+cd cityhash-master
+
+# Configure and build
 ./configure --prefix=$PWD/../install
 make -j$(nproc) && make install
 
