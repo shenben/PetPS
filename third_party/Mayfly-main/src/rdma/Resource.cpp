@@ -1,5 +1,6 @@
 #include "HugePageAlloc.h"
 #include "Rdma.h"
+#include "ibv_exp_compat.h"
 #include <arpa/inet.h>
 
 #include <cmath>

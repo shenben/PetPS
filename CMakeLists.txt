@@ -1,16 +1,18 @@
-project(petps)
 cmake_minimum_required(VERSION 3.8)
 
+# Compiler settings must be set BEFORE project() is called
 set(CMAKE_C_COMPILER "/usr/bin/gcc-9")
 set(CMAKE_CXX_COMPILER "/usr/bin/g++-9")
+
+project(petps)
 set(CMAKE_VERBOSE_MAKEFILE ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 
 # Please modify the following path to your installed path.
-set(folly_DIR "/home/xieminhui/folly-install/usr/local/lib/cmake/folly")
-set(FOLLY_ROOT_DIR "/home/xieminhui/folly-install")
-set(TBB_DIR "/home/xieminhui/intel/oneapi/tbb/latest/lib/cmake/tbb")
+set(folly_DIR "/home/pxg/folly-install/usr/local/lib/cmake/folly")
+set(FOLLY_ROOT_DIR "/home/pxg/folly-install")
+set(TBB_DIR "/home/pxg/intel/oneapi/tbb/latest/lib/cmake/tbb")
 
 find_package(folly REQUIRED)
 find_package(glog CONFIG REQUIRED)

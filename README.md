@@ -19,14 +19,15 @@ If you find this repository useful, we would appreciate citations to our paper.
 ## System Requirements
 - Mellanox ConnectX-5 NICs and above
 - Intel Optane Persistent Memory (Gen1 or Gen2)
-- RDMA Driver: MLNX_OFED_LINUX-4.9-5.1.0.0 (If you use MLNX_OFED_LINUX-5**, you should modify codes to resolve interface incompatibility)
+- RDMA Driver: MLNX_OFED_LINUX-4.9-5.1.0.0 (If you use MLNX_OFED_LINUX-5**, you should modify codes to resolve interface incompatibility - see Ubuntu 22.04 setup notes)
 - Memcached (to exchange QP information)
-- Software dependencies: 
+- Software dependencies:
     - Folly v2022.01.17.00
     - GLog v0.5.0
     - fmt
     - PB v3.10.0
     - Intel OneAPI (libtbb v2021.6.0)
+    - Boost 1.74 (for Ubuntu 22.04)
 
 
 
@@ -47,12 +48,59 @@ petps
 
 ## Setup
 
-### Step 1: Setup Dependences (on Ubuntu 18.04)
+### Step 1: Setup Dependences
+
+#### Option 1: Ubuntu 18.04
 - We provide script for installing 3rd-party dependencies, but it is tested only on ubuntu 18.04.
 
     `bash tools/install-dependences.sh`
 
 - For other distributions of linux, you may manually install the dependencies as shown in `install-dependences.sh`.
+
+#### Option 2: Ubuntu 22.04 (with MLNX_OFED_LINUX-5.x)
+
+**Prerequisites:**
+```bash
+# Remove conflicting old boost installation
+sudo mv /usr/local/include/boost /usr/local/include/boost.old
+```
+
+**Install Dependencies:**
+```bash
+# Install system dependencies
+sudo apt install -y build-essential cmake libssl-dev libcurl4-openssl-dev \
+    libgflags-dev libgtest-dev libgoogle-glog-dev libibverbs-dev \
+    libncurses-dev libdw-dev libdwarf-dev libunwind-dev libaio-dev \
+    libsodium-dev libbz2-dev liblzma-dev liblz4-dev libzstd-dev \
+    libsnappy-dev libdouble-conversion-dev
+```
+
+**Build Folly (v2022.01.17.00):**
+```bash
+cd ~/folly
+git checkout v2022.01.17.00
+rm -rf _build && mkdir _build && cd _build
+cmake .. -DCMAKE_PREFIX_PATH=/usr -DCMAKE_CXX_FLAGS="-fPIC" -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+make -j$(nproc)
+rm -rf ~/folly-install && make DESTDIR=~/folly-install install
+```
+
+**Build Cityhash:**
+```bash
+cd ~/PetPS/build/cityhash/cityhash-master
+./configure --prefix=$PWD/../install
+make -j$(nproc) && make install
+```
+
+**Compile PetPS:**
+```bash
+cd ~/PetPS/build
+rm -rf CMakeCache.txt CMakeFiles
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCITYHASH_ROOT_DIR=$HOME/PetPS/build/cityhash/install
+make -j$(nproc)
+```
+
+**Note:** If you encounter boost version mismatch errors, ensure `/usr/local/include/boost` (old boost 1.62) is removed and only system boost 1.74 is used.
 
 ### Step 2: Setup Persistent Memory
 
@@ -73,8 +121,16 @@ petps
 ## Getting Started
 
 - Compile the project.
- 
-    `mkdir build; cd build; cmake .. -DCMAKE_BUILD_TYPE=Release; make -j`
+
+    ```bash
+    mkdir build; cd build
+    # For Ubuntu 18.04:
+    cmake .. -DCMAKE_BUILD_TYPE=Release
+    # For Ubuntu 22.04 (with CITYHASH_ROOT_DIR):
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DCITYHASH_ROOT_DIR=$HOME/PetPS/build/cityhash/install
+    make -j
+    ```
+
 - Set the IPs of servers for evaluation in `benchmark/exp_config.py`.
 
 - Set the IP and port of memcached server in `third_party/Mayfly-main/memcached.conf`.

@@ -1,7 +1,7 @@
 #include "pet_hash.h"
 // #include "third_party/HashEvaluation-for-petps/hash/common/hash_api.h"
 #include "memory/shm_file.h"
-#include "/home/xieminhui/HashEvaluation/hash/common/hash_api.h"
+#include "third_party/HashEvaluation-for-petps/hash/common/hash_api.h"
 
 typedef base::PetHash<uint64, uint64> PiBenchPetHashDict;
 const bool IGNORE_LOAD_FACTOR = false;

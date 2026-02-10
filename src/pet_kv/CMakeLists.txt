@@ -21,9 +21,9 @@ target_link_libraries(PiBenchDash PRIVATE dash_hash base)
 add_custom_command(
   TARGET PiBenchPetHash
   POST_BUILD
-  COMMAND cp "$<TARGET_FILE:PiBenchPetHash>" "/home/xieminhui/HashEvaluation/bin/")
+  COMMAND cp "$<TARGET_FILE:PiBenchPetHash>" "/home/pxg/HashEvaluation/bin/")
 
 add_custom_command(
   TARGET PiBenchDash
   POST_BUILD
-  COMMAND cp "$<TARGET_FILE:PiBenchDash>" "/home/xieminhui/HashEvaluation/bin/")
+  COMMAND cp "$<TARGET_FILE:PiBenchDash>" "/home/pxg/HashEvaluation/bin/")

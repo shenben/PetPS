@@ -75,7 +75,7 @@ mkdir _build && \
 cd _build && \ 
 CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake .. && \ 
 make -j && \ 
-make DESTDIR=/home/xieminhui/folly-install install
+make DESTDIR=/home/pxg/folly-install install
 
 # PB
 RUN apt-get update -y && \ 
