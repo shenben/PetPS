@@ -18,6 +18,7 @@
 #include "third_party/Mayfly-main/include/DSM.h"
 
 DEFINE_string(actor, "", "server/client");
+DEFINE_string(dataset, "zipfian", "zipfian/dataset");
 DECLARE_int32(value_size);
 DECLARE_int32(max_kv_num_per_request);
 DEFINE_int64(key_space_m, 100, "key space in million");
@@ -47,6 +48,7 @@ public:
     args.key_space_M_ = FLAGS_key_space_m;
     args.zipf_theta_ = FLAGS_zipf_theta;
     args.value_size_ = FLAGS_value_size;
+    args.dataset_ = FLAGS_dataset;
     benchmark_client_.reset(new BenchmarkClientCommon(args));
   }
   void Main() { benchmark_client_->Run(); }
@@ -246,9 +248,9 @@ int main(int argc, char *argv[]) {
   base::PMMmapRegisterCenter::GetConfig().numa_id = 0;
 
   if (FLAGS_actor == "server") {
-    system(
-        "bash "
-        "/home/xieminhui/petps/third_party/Mayfly-main/script/restartMemc.sh");
+    // system(
+    //     "bash "
+    //     "/home/xieminhui/petps/third_party/Mayfly-main/script/restartMemc.sh");
     Server server(FLAGS_thread_num);
     server.Main();
   } else if (FLAGS_actor == "client") {
