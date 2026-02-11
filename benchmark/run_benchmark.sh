@@ -20,11 +20,11 @@ SERVER_BIN="/home/pxg/PetPS/build/bin/perf_sgl"
 CLIENT_BIN="/home/pxg/PetPS/build/bin/perf_sgl"
 MEMCACHED_PORT=21111
 VALUE_SIZE=64
-BATCH_READ_COUNT=300
-KEY_SPACE_M=100
-ZIPF_THETA=0.99
+BATCH_READ_COUNT=1
+KEY_SPACE_M=1
+ZIPF_THETA=0
 THREAD_NUM=1
-ASYNC_REQ_NUM=8
+ASYNC_REQ_NUM=1
 MAX_KV_NUM_PER_REQUEST=1
 DATASET="zipfian"
 
@@ -55,11 +55,12 @@ pkill -9 -f perf_sgl 2>/dev/null || true
 
 sleep 2
 
-# Set up memcached barrier on server (for DSM coordination)
-# Client waits for xmh-consistent-dsm to equal its globalID (1)
-log_info "Setting up xmh-consistent-dsm barrier on server..."
+# Initialize memcached counters for DSM coordination
+log_info "Initializing memcached counters..."
 sshpass -p "$PETPS_SSH_PASS" ssh -o StrictHostKeyChecking=no ${SERVER_USER}@${SERVER_IP} \
-    "printf 'set xmh-consistent-dsm 0 0 1\r\n1\r\nquit\r\n' | nc localhost ${MEMCACHED_PORT}" 2>/dev/null || true
+    "printf 'set serverNum 0 0 1\r\n0\r\nquit\r\n' | nc localhost ${MEMCACHED_PORT}" 2>/dev/null || true
+sshpass -p "$PETPS_SSH_PASS" ssh -o StrictHostKeyChecking=no ${SERVER_USER}@${SERVER_IP} \
+    "printf 'set xmh-consistent-dsm 0 0 1\r\n0\r\nquit\r\n' | nc localhost ${MEMCACHED_PORT}" 2>/dev/null || true
 
 # Start server with longer timeout for RDMA initialization
 log_info "Starting server on ${SERVER_IP}..."
