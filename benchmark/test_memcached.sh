@@ -14,7 +14,7 @@ fi
 
 SERVER_IP="10.10.2.246"
 SERVER_USER="pxg"
-MEMCACHED_PORT=21211
+MEMCACHED_PORT=21111
 
 echo "Testing Memcached connectivity..."
 echo "Server: ${SERVER_IP}:${MEMCACHED_PORT}"
