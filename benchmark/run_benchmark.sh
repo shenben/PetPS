@@ -93,6 +93,9 @@ log_info "Starting client on ${CLIENT_IP}..."
 cd /home/pxg/PetPS/build
 nohup ./bin/perf_sgl \
     --actor=client \
+    --global_id=1 \
+    --num_server_processes=1 \
+    --num_client_processes=1 \
     --value_size=${VALUE_SIZE} \
     --key_space_m=${KEY_SPACE_M} \
     --batch_read_count=${BATCH_READ_COUNT} \
