@@ -12,6 +12,9 @@
 // using namespace PiBench;
 #define XMH_VARIABLE_SIZE_KV
 
+static const int hash_api_valid_file_size = 123;
+
+#ifdef USE_PMEM
 extern hash_api *create_hashtable_pclht(const hashtable_options_t &opt,
                                         unsigned sz, unsigned tnum);
 extern hash_api *create_hashtable_level(const hashtable_options_t &opt,
@@ -22,8 +25,6 @@ extern hash_api *create_hashtable_cceh(const hashtable_options_t &opt,
                                        unsigned sz, unsigned tnum);
 extern hash_api *create_hashtable_ccehvm(const hashtable_options_t &opt,
                                          unsigned sz, unsigned tnum);
-
-static const int hash_api_valid_file_size = 123;
 
 class HashAPI : public BaseKV {
 public:
@@ -196,3 +197,4 @@ private:
 };
 
 FACTORY_REGISTER(BaseKV, HashAPI, HashAPI, const BaseKVConfig &);
+#endif

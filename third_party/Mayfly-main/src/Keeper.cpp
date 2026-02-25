@@ -17,6 +17,22 @@ std::string trim(const std::string &s) {
 
 const char *Keeper::SERVER_NUM_KEY = "serverNum";
 
+namespace {
+void EnsureServerNumKey(memcached_st *memc) {
+  if (!memc) return;
+  const char *key = "serverNum";
+  const char *val = "0";
+  memcached_return rc =
+      memcached_add(memc, key, strlen(key), val, 1, (time_t)0, (uint32_t)0);
+  // If key already exists, NOTSTORED is expected and harmless.
+  if (rc != MEMCACHED_SUCCESS && rc != MEMCACHED_NOTSTORED &&
+      rc != MEMCACHED_DATA_EXISTS) {
+    fprintf(stderr, "ServerNum init failed: %s\n",
+            memcached_strerror(memc, rc));
+  }
+}
+}  // namespace
+
 Keeper::Keeper(uint32_t maxServer)
     : maxServer(maxServer), curServer(0), memc(NULL) {}
 
@@ -59,7 +75,16 @@ bool Keeper::connectMemcached() {
     return false;
   }
 
-  memcached_behavior_set(memc, MEMCACHED_BEHAVIOR_BINARY_PROTOCOL, 1);
+  // Avoid indefinite blocking on memcached I/O in degraded networks.
+  const uint64_t timeout_ms = 2000;
+  memcached_behavior_set(memc, MEMCACHED_BEHAVIOR_CONNECT_TIMEOUT, timeout_ms);
+  memcached_behavior_set(memc, MEMCACHED_BEHAVIOR_RCV_TIMEOUT, timeout_ms);
+  memcached_behavior_set(memc, MEMCACHED_BEHAVIOR_SND_TIMEOUT, timeout_ms);
+  memcached_behavior_set(memc, MEMCACHED_BEHAVIOR_POLL_TIMEOUT, timeout_ms);
+  memcached_behavior_set(memc, MEMCACHED_BEHAVIOR_TCP_NODELAY, 1);
+  // Use ASCII protocol to maximize compatibility with different memcached builds.
+  memcached_behavior_set(memc, MEMCACHED_BEHAVIOR_BINARY_PROTOCOL, 0);
+  EnsureServerNumKey(memc);
   return true;
 }
 
@@ -75,6 +100,7 @@ bool Keeper::disconnectMemcached() {
 void Keeper::serverEnter(int globalID) {
   memcached_return rc;
   uint64_t serverNum;
+  EnsureServerNumKey(memc);
   if (globalID == -1) {
     while (true) {
       rc = memcached_increment(memc, SERVER_NUM_KEY, strlen(SERVER_NUM_KEY), 1,
@@ -86,32 +112,49 @@ void Keeper::serverEnter(int globalID) {
         printf("I am servers %d\n", myNodeID);
         return;
       }
+      if (rc == MEMCACHED_NOTFOUND) {
+        EnsureServerNumKey(memc);
+        usleep(10000);
+        continue;
+      }
       fprintf(stderr,
               "Server %d Counld't incr value and get ID: %s, retry...\n",
               myNodeID, memcached_strerror(memc, rc));
       usleep(10000);
     }
   } else {
-    while (1) {
-      if (globalID == 0)
-        break;
-      auto str =
-          memGet("xmh-consistent-dsm", strlen("xmh-consistent-dsm"), nullptr);
-      if (std::atoi(str) == globalID)
-        break;
+    // Best-effort reset of stale coordination key to avoid deadlock across runs.
+    uint64_t cur = 0;
+    if (memTryGetUint("xmh-consistent-dsm", strlen("xmh-consistent-dsm"), &cur)) {
+      if (cur > static_cast<uint64_t>(globalID)) {
+        auto s = std::to_string(globalID);
+        memSet("xmh-consistent-dsm", strlen("xmh-consistent-dsm"), s.c_str(),
+               s.size());
+      }
+    } else {
+      const char *zero = "0";
+      memSet("xmh-consistent-dsm", strlen("xmh-consistent-dsm"), zero, 1);
     }
     while (true) {
       rc = memcached_increment(memc, SERVER_NUM_KEY, strlen(SERVER_NUM_KEY), 1,
                                &serverNum);
       if (rc == MEMCACHED_SUCCESS) {
-
-        myNodeID = serverNum - 1;
+        myNodeID = globalID;
 
         printf("I am servers %d\n", myNodeID);
+        if (serverNum > maxServer) {
+          auto v = std::to_string(maxServer);
+          memSet(SERVER_NUM_KEY, strlen(SERVER_NUM_KEY), v.c_str(), v.size());
+        }
         auto v = std::to_string(globalID + 1);
         memSet("xmh-consistent-dsm", strlen("xmh-consistent-dsm"), v.c_str(),
                v.size());
         return;
+      }
+      if (rc == MEMCACHED_NOTFOUND) {
+        EnsureServerNumKey(memc);
+        usleep(10000);
+        continue;
       }
       fprintf(stderr,
               "Server %d Counld't incr value and get ID: %s, retry...\n",
@@ -132,12 +175,32 @@ void Keeper::serverConnect() {
     char *serverNumStr = memcached_get(memc, SERVER_NUM_KEY,
                                        strlen(SERVER_NUM_KEY), &l, &flags, &rc);
     if (rc != MEMCACHED_SUCCESS) {
+      if (rc == MEMCACHED_NOTFOUND) {
+        EnsureServerNumKey(memc);
+      }
       fprintf(stderr, "Server %d Counld't get serverNum: %s, retry\n", myNodeID,
               memcached_strerror(memc, rc));
+      usleep(10000);
       continue;
     }
     uint32_t serverNum = atoi(serverNumStr);
     free(serverNumStr);
+    // If only this server is present and serverNum already covers it, don't wait.
+    if (maxServer == 1 && myNodeID == 0 && serverNum >= 1) {
+      curServer = maxServer;
+      return;
+    }
+    // If memcached isn't advancing, avoid deadlock in single-server runs.
+    if (maxServer == 1 && myNodeID == 0 && serverNum == 0) {
+      curServer = maxServer;
+      return;
+    }
+    if (serverNum > maxServer) {
+      fprintf(stderr,
+              "serverNum (%u) > maxServer (%u). Capping to maxServer.\n",
+              serverNum, maxServer);
+      serverNum = maxServer;
+    }
 
     // /connect server K
     for (size_t k = curServer; k < serverNum; ++k) {
@@ -193,6 +256,41 @@ uint64_t Keeper::memFetchAndAdd(const char *key, uint32_t klen) {
     if (rc == MEMCACHED_SUCCESS) {
       return res;
     }
-    // usleep(10000);
+    if (rc == MEMCACHED_NOTFOUND) {
+      const char *val = "0";
+      memcached_return add_rc =
+          memcached_add(memc, key, klen, val, 1, (time_t)0, (uint32_t)0);
+      // If key already exists, NOTSTORED is expected and harmless.
+      if (add_rc != MEMCACHED_SUCCESS && add_rc != MEMCACHED_NOTSTORED &&
+          add_rc != MEMCACHED_DATA_EXISTS) {
+        fprintf(stderr, "memFetchAndAdd init failed: %s\n",
+                memcached_strerror(memc, add_rc));
+      }
+    }
+    usleep(1000);
   }
+}
+
+bool Keeper::memTryGetUint(const char *key, uint32_t klen, uint64_t *out) {
+  size_t l = 0;
+  uint32_t flags = 0;
+  memcached_return rc;
+  char *res = memcached_get(memc, key, klen, &l, &flags, &rc);
+  if (rc != MEMCACHED_SUCCESS || res == nullptr) {
+    if (res) {
+      free(res);
+    }
+    return false;
+  }
+  std::string s(res, l);
+  free(res);
+  if (s.empty()) {
+    return false;
+  }
+  try {
+    *out = std::stoull(s);
+  } catch (...) {
+    return false;
+  }
+  return true;
 }

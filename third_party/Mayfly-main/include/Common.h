@@ -38,7 +38,9 @@ constexpr NodeIDType kServerNodeID = 0;
 constexpr uint64_t kServerMemSize = 16; // GB
 constexpr uint64_t kDPUMemSize = 1;     // GB
 
-constexpr uint8_t kMaxNetThread = 120;
+// Keep large enough for benchmark thread counts while still avoiding
+// excessive QP usage.
+constexpr uint8_t kMaxNetThread = 32;
 constexpr uint8_t kMaxDPUThread = 8;
 
 

@@ -67,7 +67,7 @@ if(NOT epoch_reclaimer_POPULATED)
   target_include_directories(dash_hash INTERFACE ${epoch_reclaimer_SOURCE_DIR})
 endif()
 
-option(USE_PMEM "enable persistent memory support" ON)
+option(USE_PMEM "enable persistent memory support" OFF)
 
 set(libs_to_link pthread gflags Folly::folly -pthread)
 

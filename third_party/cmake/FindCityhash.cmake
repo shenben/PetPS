@@ -19,7 +19,9 @@
 # IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-set(CITYHASH_ROOT_DIR ${CMAKE_BINARY_DIR}/cityhash)
+if(NOT CITYHASH_ROOT_DIR)
+	set(CITYHASH_ROOT_DIR ${CMAKE_BINARY_DIR}/cityhash)
+endif()
 set(CITYHASH_USE_STATIC_LIBS true)
 
 # Set the library prefix and library suffix properly.
@@ -36,6 +38,15 @@ else()
 endif()
 
 include(FindPackageHandleStandardArgs)
+
+if(CITYHASH_INCLUDE_DIR AND CITYHASH_LIBRARY)
+	set(CITYHASH_FOUND TRUE)
+	set(CITYHASH_LIBRARIES ${CITYHASH_LIBRARY})
+	set(CITYHASH_INCLUDE_DIRS ${CITYHASH_INCLUDE_DIR})
+	get_filename_component(CITYHASH_LIB_DIR ${CITYHASH_LIBRARY} DIRECTORY)
+	set(CITYHASH_LIB_DIRS ${CITYHASH_LIB_DIR})
+	mark_as_advanced(CITYHASH_LIBRARIES CITYHASH_INCLUDE_DIRS CITYHASH_LIB_DIRS)
+endif()
 
 macro(DO_FIND_CITYHASH_SYSTEM)
 	find_path(CITYHASH_INCLUDE_DIR city.h
@@ -82,8 +93,8 @@ macro(DO_FIND_CITYHASH_DOWNLOAD)
 	include(ExternalProject)
 	ExternalProject_Add(
 		Cityhash
-		URL https://github.com/formath/cityhash/archive/1.1.1.tar.gz
-		URL_HASH SHA256=01dd4080050dc5fbd806c4c66b5f09f9b86fb9ba73e4f1076ba31e907ac58f84
+		URL https://github.com/google/cityhash/archive/f5dc54147fcce12cefd16548c8e760d68ac04226.tar.gz
+		URL_HASH SHA256=22c24af73a3fec9402e3a183f2dee87d71f13a81859b0406472e671fb7d13a69
 		UPDATE_COMMAND ""
 		CONFIGURE_COMMAND ./configure --prefix=${CITYHASH_ROOT_DIR}
 		BUILD_COMMAND make all

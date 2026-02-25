@@ -19,10 +19,13 @@ if(USE_PMKV MATCHES "ON")
   target_link_libraries(kv_engine INTERFACE ${LIBPMEMKV_LIBRARIES})
 endif()
 
-target_link_libraries(
-  kv_engine
-  INTERFACE dash_hash pet_kv PMHashPCLHT PMHashLevel PMHashClevel
-            PMHashCCEHVM)
+target_link_libraries(kv_engine INTERFACE pet_kv)
+if(USE_PMEM MATCHES "ON")
+  target_link_libraries(
+    kv_engine
+    INTERFACE dash_hash PMHashPCLHT PMHashLevel PMHashClevel PMHashCCEHVM)
+  target_compile_definitions(kv_engine INTERFACE USE_PMEM)
+endif()
 
 target_sources(
   kv_engine INTERFACE ${PROJECT_SOURCE_DIR}/src/kv_engine/kv_engine_register.cc)

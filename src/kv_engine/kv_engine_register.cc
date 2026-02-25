@@ -1,6 +1,8 @@
 #include "base_kv.h"
 #include "engine_pethash.h"
+#ifdef USE_PMEM
 #include "engine_dash.h"
+#endif
 #include "engine_hashapi.h"
 #include "engine_map.h"
 #include "engine_mappm.h"

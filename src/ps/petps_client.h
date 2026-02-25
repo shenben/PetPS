@@ -9,6 +9,10 @@
 
 #include <memory>
 #include <string>
+#include <folly/portability/GFlags.h>
+
+DECLARE_bool(skip_get_server_threadids);
+DECLARE_int32(fallback_server_thread_count);
 
 namespace petps {
 class WqRPCParameterClient : public BaseParameterClient {
@@ -25,7 +29,25 @@ public:
   void InitThread() override {
     LOG(INFO) << "dsm_->registerThread()";
     dsm_->registerThread();
-    serverThreadIdsRoutedTo_ = GetServerThreadIDs();
+    LOG(INFO) << "dsm_->registerThread() done, thread_id="
+              << dsm_->getMyThreadID();
+    if (FLAGS_skip_get_server_threadids) {
+      int n = FLAGS_fallback_server_thread_count;
+      if (n <= 0) {
+        n = 1;
+      }
+      serverThreadIdsRoutedTo_.clear();
+      serverThreadIdsRoutedTo_.reserve(n);
+      for (int i = 0; i < n; ++i) {
+        serverThreadIdsRoutedTo_.push_back(i);
+      }
+      LOG(WARNING) << "Skip GetServerThreadIDs; fallback threads="
+                   << base::ConstArray<int>(serverThreadIdsRoutedTo_).Debug();
+    } else {
+      serverThreadIdsRoutedTo_ = GetServerThreadIDs();
+    }
+    LOG(INFO) << "GetServerThreadIDs done, routed_to="
+              << base::ConstArray<int>(serverThreadIdsRoutedTo_).Debug();
   }
 
   int GetParameter(base::ConstArray<uint64_t> keys,

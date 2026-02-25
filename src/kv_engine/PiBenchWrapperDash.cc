@@ -2,8 +2,7 @@
 #include "third_party/dash/src/Hash.h"
 #include "third_party/dash/src/allocator.h"
 #include "third_party/dash/src/ex_finger.h"
-// #include "third_party/HashEvaluation-for-petps/hash/common/hash_api.h"
-#include "/home/xieminhui/HashEvaluation/hash/common/hash_api.h"
+#include "third_party/HashEvaluation-for-petps/hash/common/hash_api.h"
 
 const bool IGNORE_LOAD_FACTOR = false;
 

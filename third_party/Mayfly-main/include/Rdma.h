@@ -59,6 +59,7 @@ struct RdmaContext {
   uint8_t devIndex;
   uint8_t port;
   int gidIndex;
+  enum ibv_mtu active_mtu;
 
   ibv_context *ctx;
   ibv_pd *pd;

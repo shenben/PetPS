@@ -29,6 +29,9 @@ class PersistSimpleMalloc : public MallocApi {
                       int slab_size)
       : memory_size_(memory_size), slab_size_(slab_size) {
     bool file_exists = base::file_util::PathExists(filename);
+    if (base::PMMmapRegisterCenter::GetConfig().use_dram) {
+      file_exists = false;  // DRAM is non-persistent; always reinit
+    }
 
     meta_data_memory_size_ = memory_size_ / slab_size_ * sizeof(uint64_t);
 
@@ -292,6 +295,9 @@ class PersistMemoryPool : public MallocApi {
                     const std::vector<int> &slab_sizes)
       : allocated_slab_sizes_(slab_sizes.begin(), slab_sizes.end()) {
     bool file_exists = base::file_util::PathExists(filename);
+    if (base::PMMmapRegisterCenter::GetConfig().use_dram) {
+      file_exists = false;  // DRAM is non-persistent; always reinit
+    }
     if (!shm_file_.Initialize(filename, memory_size)) {
       file_exists = false;
       CHECK(base::file_util::Delete(filename, false));
@@ -383,7 +389,7 @@ class PersistMemoryPool : public MallocApi {
         goto final;
       }
       LOG(FATAL) << fmt::format("Persist Memory Pool OOM, total_malloc={}",
-                                total_malloc_);
+                                total_malloc_.load());
     }
   final:
     CHECK(return_ptr);

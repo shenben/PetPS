@@ -3,9 +3,18 @@
 #include "shard_manager.h"
 #include "petps_magic.h"
 
+#include <chrono>
+#include <mutex>
+
 DECLARE_int32(value_size);
 DECLARE_int32(max_kv_num_per_request);
 DEFINE_int32(numa_id, 0, "");
+DEFINE_int32(rnic_id, -1, "RDMA NIC index override; -1 uses numa_id");
+DEFINE_int32(gid_index, -1, "RDMA GID index override; -1 uses default");
+DEFINE_bool(skip_get_server_threadids, false,
+            "Skip RPC to fetch server thread IDs (use fallback list)");
+DEFINE_int32(fallback_server_thread_count, 2,
+             "Fallback server thread count when skipping GetServerThreadIDs");
 
 namespace petps {
 
@@ -17,7 +26,14 @@ void WqRPCParameterClient::Init() {
   cluster.serverNR = XPostoffice::GetInstance()->NumServers();
   cluster.clientNR = XPostoffice::GetInstance()->NumClients();
   DSMConfig config(CacheConfig(), cluster, 0, true);
-  config.NIC_name = '0' + FLAGS_numa_id;
+  const int rnic = (FLAGS_rnic_id >= 0) ? FLAGS_rnic_id : FLAGS_numa_id;
+  config.NIC_name = '0' + rnic;
+  LOG(INFO) << "RDMA NIC index = " << rnic;
+  if (FLAGS_gid_index >= 0) {
+    global_node_config[XPostoffice::GetInstance()->GlobalID()].gid_index =
+        FLAGS_gid_index;
+    LOG(INFO) << "RDMA GID index override = " << FLAGS_gid_index;
+  }
   config.dsmSize = dsm_size;
   config.baseAddr = (uint64_t)dsm_base_addr;
   dsm_ = DSM::getInstance(config, XPostoffice::GetInstance()->GlobalID());
@@ -43,22 +59,37 @@ std::vector<int> WqRPCParameterClient::GetServerThreadIDs() {
   m->type = GET_SERVER_THREADIDS;
   // RPC to the server ID <shard_>
   dsm_->rpc_call(m, shard_, 0);
-  uint64_t wr_id;
+  const uint64_t max_wait_ns = 600ULL * 1000 * 1000 * 1000;  // 10 min
+  uint64_t wait_start = Timer::get_time_ns();
   while (1) {
-    auto recv = dsm_->rpc_fast_wait(&wr_id);
-    // FB_LOG_EVERY_MS(WARNING, 5000)
-    //     << "client wait the result of GetServerThreadIDs";
-    if (recv) {
-      CHECK_EQ(recv->type, RESP_GET_SERVER_THREADIDS);
-      Cursor cursor;
-      Slice extra_data = recv->get_string(cursor);
-      base::ConstArray<int> cores((int *)extra_data.s,
-                                  extra_data.len / sizeof(int));
-      LOG(INFO) << folly::sformat(
-          "client{} {}th thread are routed to PS{} ({})th thread", m->node_id,
-          (int)m->t_id, shard_, cores.Debug());
-      return cores.ToVector();
+    // (Re)send the request in case the server wasn't ready previously.
+    dsm_->rpc_call(m, shard_, 0);
+    const uint64_t deadline =
+        Timer::get_time_ns() + 30ULL * 1000 * 1000 * 1000;  // 30s
+    while (1) {
+      auto recv = dsm_->rpc_wait_timeout(deadline);
+      FB_LOG_EVERY_MS(WARNING, 5000)
+          << "client wait the result of GetServerThreadIDs";
+      if (recv == reinterpret_cast<RawMessage *>(1)) {
+        break;  // timeout; re-send
+      }
+      if (recv) {
+        CHECK_EQ(recv->type, RESP_GET_SERVER_THREADIDS);
+        Cursor cursor;
+        Slice extra_data = recv->get_string(cursor);
+        base::ConstArray<int> cores((int *)extra_data.s,
+                                    extra_data.len / sizeof(int));
+        LOG(INFO) << folly::sformat(
+            "client{} {}th thread are routed to PS{} ({})th thread", m->node_id,
+            (int)m->t_id, shard_, cores.Debug());
+        return cores.ToVector();
+      }
     }
+    if (Timer::get_time_ns() - wait_start > max_wait_ns) {
+      LOG(FATAL) << "GetServerThreadIDs timed out after 10 minutes; "
+                    "server not ready or RDMA not connected";
+    }
+    usleep(200 * 1000);
   }
   LOG(FATAL) << "not reach here";
   return std::vector<int>();

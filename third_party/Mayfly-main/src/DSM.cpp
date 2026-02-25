@@ -45,7 +45,8 @@ DSM::DSM(const DSMConfig &conf, int globalID_xmh)
 
   if (!is_server()) {
     if (0 == this->conf.baseAddr) {
-      this->conf.dsmSize = 100 * define::MB;  // FIXME
+      // Smaller DSM region is enough for non-sglist clients (staging buffer).
+      this->conf.dsmSize = 32 * define::MB;  // FIXME
       this->conf.baseAddr = (uint64_t)hugePageAlloc(this->conf.dsmSize);
     }
   } else {

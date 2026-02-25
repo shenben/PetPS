@@ -1,6 +1,8 @@
 #include "DirectoryConnection.h"
 
 #include "Connection.h"
+#include <cstdio>
+#include <cstdlib>
 
 DirectoryConnection::DirectoryConnection(uint16_t dirID, void *dsmPool,
                                          uint64_t dsmSize, uint32_t machineNR,
@@ -24,12 +26,24 @@ DirectoryConnection::DirectoryConnection(uint16_t dirID, void *dsmPool,
   this->dsmPool = dsmPool;
   this->dsmSize = dsmSize;
   this->dsmMR = createMemoryRegion((uint64_t)dsmPool, dsmSize, &ctx, is_server);
+  if (!this->dsmMR) {
+    fprintf(stderr,
+            "Failed to register DSM MR, size=%lu\n",
+            static_cast<unsigned long>(dsmSize));
+    abort();
+  }
   this->dsmLKey = dsmMR->lkey;
 
   // cache memory
   this->cachePool = cachePool;
   this->cacheSize = cacheSize;
   this->cacheMR = createMemoryRegion((uint64_t)cachePool, cacheSize, &ctx);
+  if (!this->cacheMR) {
+    fprintf(stderr,
+            "Failed to register cache MR, size=%lu\n",
+            static_cast<unsigned long>(cacheSize));
+    abort();
+  }
   this->cacheLKey = cacheMR->lkey;
 
   // on-chip lock memory
@@ -43,7 +57,13 @@ DirectoryConnection::DirectoryConnection(uint16_t dirID, void *dsmPool,
   for (int i = 0; i < kv::kMaxNetThread; ++i) {
     data2app[i] = new ibv_qp *[machineNR];
     for (size_t k = 0; k < machineNR; ++k) {
-      createQueuePair(&data2app[i][k], IBV_QPT_RC, cq, &ctx);
+      if (!createQueuePair(&data2app[i][k], IBV_QPT_RC, cq, &ctx) ||
+          data2app[i][k] == nullptr) {
+        fprintf(stderr,
+                "Failed to create QP (dir=%u, net_thread=%d, remote=%zu)\n",
+                dirID, i, k);
+        abort();
+      }
     }
   }
 }

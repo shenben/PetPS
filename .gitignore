@@ -4,6 +4,7 @@ benchmark/bench.log
 benchmark/fordebug.csv
 
 build
+build_check_*/
 cmake-build-debug/
 cmake-build-release/
 
@@ -41,5 +42,6 @@ cmake-build-release/
 *.app
 
 third_party/dash/third_party/pmdk
+logs/
 .idea
 .vscode

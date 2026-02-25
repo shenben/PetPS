@@ -1,5 +1,7 @@
 #pragma once
+#ifdef USE_PMEM
 #include "third_party/dash/third_party/pmdk/src/PMDK/src/include/libpmemobj.h"
+#endif
 
 #include "memory/shm_file.h"
 #include <atomic>
@@ -19,7 +21,7 @@ static const char *layout_name = "cceh_hashtable";
 static const constexpr uint64_t pool_addr = 0x600000000000;
 static const constexpr uint64_t kPMDK_PADDING = 48;
 
-#if 1
+#ifdef USE_PMEM
 
 static void flush(void *addr) {
 #if CASCADE_LAKE == 1

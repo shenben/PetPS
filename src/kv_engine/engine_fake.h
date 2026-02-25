@@ -7,6 +7,7 @@
 #define XMH_SIMPLE_MALLOC
 
 DEFINE_int32(fake_kv_index_sleepns, 0, "sleep ns in the index part of FakeKV");
+static const int valid_file_size = 123;
 
 class KVEngineFakeKV : public BaseKV {
 public:

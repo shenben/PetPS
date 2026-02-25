@@ -12,6 +12,8 @@
 
 DEFINE_bool(thread_cut_off, false, "thread cut off");
 DEFINE_int32(benchmark_seconds, 120, "benchmark seconds");
+DEFINE_int32(client_ready_timeout_s, 600,
+             "max seconds to wait for client threads to become ready");
 
 class BenchmarkClientCommon {
  public:
@@ -44,6 +46,7 @@ class BenchmarkClientCommon {
       each.store(false);
     }
     pause_flags_ = false;
+    ready_threads_.store(0, std::memory_order_release);
     for (int i = 0; i < kMaxThread; i++) {
       tp[i][0] = -1;
     }
@@ -125,10 +128,20 @@ class BenchmarkClientCommon {
       stop_thread_id_orders.push_back(i);
 
     // wait all threads in client ready
-    for (int i = 0; i < args_.thread_count_; i++) {
-      while (tp[i][0] != 0)
-        FB_LOG_EVERY_MS(WARNING, 5000)
-            << "main client thread, stalled for waiting thread " << i;
+    auto wait_start_us = base::GetTimestamp();
+    while (ready_threads_.load(std::memory_order_acquire) <
+           args_.thread_count_) {
+      FB_LOG_EVERY_MS(WARNING, 5000)
+          << "main client thread, stalled for waiting threads "
+          << ready_threads_.load(std::memory_order_relaxed) << "/"
+          << args_.thread_count_;
+      if (base::GetTimestamp() - wait_start_us >
+          static_cast<uint64_t>(FLAGS_client_ready_timeout_s) * 1000 * 1000) {
+        LOG(FATAL) << "client threads did not become ready within "
+                   << FLAGS_client_ready_timeout_s << "s; "
+                   << "check RDMA/memcached/server readiness";
+      }
+      usleep(1000);
     }
     // wait all clients ready
     clients[0]->Barrier("clients start",
@@ -218,6 +231,7 @@ class BenchmarkClientCommon {
     // mark this thread ready
     tp[tid][0] = 0;
     LOG(INFO) << "client thread " << tid << "th ready";
+    ready_threads_.fetch_add(1, std::memory_order_release);
     while (!start_flag_)
       ;
 
@@ -287,6 +301,7 @@ class BenchmarkClientCommon {
   std::vector<std::atomic<bool>> stop_flags_;
   std::atomic<bool> pause_flags_;
   std::atomic<bool> start_flag_;
+  std::atomic<int> ready_threads_{0};
 
   constexpr static int kMaxThread = 64;
   uint64_t tp[kMaxThread][8];

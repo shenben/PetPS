@@ -1,5 +1,6 @@
 #include "HugePageAlloc.h"
 #include "Rdma.h"
+#include "ibv_exp_compat.h"
 #include <arpa/inet.h>
 
 #include <cmath>
@@ -84,6 +85,7 @@ bool createContext(RdmaContext *context, uint8_t port, int gidIndex,
   context->devIndex = devIndex;
   context->gidIndex = gidIndex;
   context->port = port;
+  context->active_mtu = portAttr.active_mtu;
   context->ctx = ctx;
   context->pd = pd;
   context->lid = portAttr.lid;
@@ -133,12 +135,23 @@ ibv_mr *createMemoryRegion(uint64_t mm, uint64_t mmSize, RdmaContext *ctx,
 
   ibv_mr *mr = NULL;
 
-  // auto flag = (mmSize < 100ull * 1024 * 1024) ? 0 : IBV_ACCESS_ON_DEMAND;
-  auto flag = 0;
-  mr = ibv_reg_mr(ctx->pd, (void *)mm, mmSize,
-                  IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
-                      IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_ATOMIC | flag
-                  /* | IBV_ACCESS_ON_DEMAND */);
+  // Use ODP for large regions to avoid pinning failures.
+  const bool want_odp = mmSize >= 100ull * 1024 * 1024;
+  int access = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
+               IBV_ACCESS_REMOTE_WRITE;
+  if (!want_odp) {
+    access |= IBV_ACCESS_REMOTE_ATOMIC;
+  } else {
+    access |= IBV_ACCESS_ON_DEMAND;
+  }
+  mr = ibv_reg_mr(ctx->pd, (void *)mm, mmSize, access);
+  if (!mr && want_odp) {
+    Debug::notifyError(
+        "ODP MR failed, retry without ODP. mm=%p, size=%lld", mm, mmSize);
+    int fallback_access = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
+                          IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_ATOMIC;
+    mr = ibv_reg_mr(ctx->pd, (void *)mm, mmSize, fallback_access);
+  }
 
   // mr = ibv_reg_mr(ctx->pd, (void *)mm, mmSize,
   //                 IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |

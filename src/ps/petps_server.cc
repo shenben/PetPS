@@ -1,7 +1,10 @@
 #include <folly/init/Init.h>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <future>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "base/factory.h"
@@ -23,10 +26,13 @@ DEFINE_int32(warmup_thread_num, 36, "");
 DEFINE_int32(thread_num, 1, "");
 DEFINE_bool(use_sglist, true, "");
 DEFINE_bool(preload, false, "");
+DEFINE_bool(check_after_preload, false, "check DB after preload");
 DEFINE_bool(check_all_inserted, false, "check DB, whether all kv are inserted");
 DEFINE_bool(use_dram, false, "");
 DEFINE_bool(exit, false, "");
 DEFINE_int32(numa_id, 0, "");
+DEFINE_int32(rnic_id, -1, "RDMA NIC index override; -1 uses numa_id");
+DEFINE_int32(gid_index, -1, "RDMA GID index override; -1 uses default");
 
 DECLARE_int32(value_size);
 DECLARE_int32(max_kv_num_per_request);
@@ -53,7 +59,8 @@ class RDMARpcParameterServiceImpl {
       config.dsmSize = pm_address_for_check_.second;
       LOG(INFO) << "register PM space to RNIC";
     } else {
-      config.dsmSize = 100 * define::MB;
+      // Smaller DSM region is enough for non-sglist (staging buffer only).
+      config.dsmSize = 32 * define::MB;
       config.baseAddr = (uint64_t)hugePageAlloc(config.dsmSize);
       LOG(INFO) << "WE DONT register PM space to RNIC";
     }
@@ -61,7 +68,14 @@ class RDMARpcParameterServiceImpl {
               << ", end = " << (void *)(config.baseAddr + config.dsmSize)
               << ", size = " << config.dsmSize;
 
-    config.NIC_name = '0' + FLAGS_numa_id;
+    const int rnic = (FLAGS_rnic_id >= 0) ? FLAGS_rnic_id : FLAGS_numa_id;
+    config.NIC_name = '0' + rnic;
+    LOG(INFO) << "RDMA NIC index = " << rnic;
+    if (FLAGS_gid_index >= 0) {
+      global_node_config[XPostoffice::GetInstance()->GlobalID()].gid_index =
+          FLAGS_gid_index;
+      LOG(INFO) << "RDMA GID index override = " << FLAGS_gid_index;
+    }
     {
       dsm_ = DSM::getInstance(config, XPostoffice::GetInstance()->GlobalID());
       CHECK_EQ(dsm_->getMyNodeID(), XPostoffice::GetInstance()->GlobalID())
@@ -81,6 +95,10 @@ class RDMARpcParameterServiceImpl {
                             i);
       tp[i][0] = 0;
     }
+    while (ready_threads_.load(std::memory_order_acquire) < thread_count_) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    LOG(INFO) << "All PS polling threads ready";
   }
 
   uint64_t GetThroughputCounterSum() const {
@@ -186,7 +204,8 @@ class RDMARpcParameterServiceImpl {
       }
       epoch_manager_->UnProtect();
       GlobalAddress gaddr = recv->receive_gaddr;
-      dsm_->write(buf, gaddr, acc, true, petps::WR_ID_GET);
+      // Ensure RDMA write completes before reusing the per-thread buffer.
+      dsm_->write_sync(buf, gaddr, acc);
     }
     if (perf_condition) value_timer_.end();
 
@@ -199,6 +218,7 @@ class RDMARpcParameterServiceImpl {
   void PollingThread(int thread_id) {
     auto_bind_core(0);
     dsm_->registerThread();
+    ready_threads_.fetch_add(1, std::memory_order_release);
     auto msg = RawMessage::get_new_msg();
 
     while (1) {
@@ -245,6 +265,7 @@ class RDMARpcParameterServiceImpl {
 
   constexpr static int kMaxThread = 128;
   uint64_t tp[kMaxThread][8];
+  std::atomic<int> ready_threads_{0};
 };
 
 int main(int argc, char *argv[]) {
@@ -341,7 +362,9 @@ int main(int argc, char *argv[]) {
   if (FLAGS_preload) {
     load_db_helper.PreLoadDB();
     kv->Util();
-    load_db_helper.CheckDBLoad();
+    if (FLAGS_check_after_preload) {
+      load_db_helper.CheckDBLoad();
+    }
     kv->DebugInfo();
     if (FLAGS_exit) {
       delete kv;

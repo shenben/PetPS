@@ -38,7 +38,7 @@ bool modifyQPtoRTR(struct ibv_qp *qp, uint32_t remoteQPN, uint16_t remoteLid,
     memset(&attr, 0, sizeof(attr));
     attr.qp_state = IBV_QPS_RTR;
 
-    attr.path_mtu = IBV_MTU_4096;
+    attr.path_mtu = context->active_mtu;
     attr.dest_qp_num = remoteQPN;
     attr.rq_psn = PSN;
 
@@ -133,4 +133,3 @@ bool modifyUDtoRTS(struct ibv_qp *qp, RdmaContext *context) {
     }
     return true;
 }
-

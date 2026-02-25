@@ -72,6 +72,8 @@ petps
 
 ## Getting Started
 
+- DRAM-only guide (no PMem): see `docs/pure_dram.md` for build flags, runtime knobs, and benchmark scripts.
+
 - Compile the project.
  
     `mkdir build; cd build; cmake .. -DCMAKE_BUILD_TYPE=Release; make -j`
@@ -86,4 +88,3 @@ petps
     `cd benchmark; python3 bench.py`
 
 - You can find the log output in `benchmark/log`.
-

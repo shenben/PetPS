@@ -105,7 +105,21 @@ class PetMultiKV {
         shm_kv_[GetShard(prefetch_key)]->HintPrefetch(prefetch_key);
       }
       auto read_data = shm_kv_[GetShard(key)]->Get(key);
-      CHECK_NE(read_data.size, 0);
+      if (UNLIKELY(read_data.size == 0)) {
+        if (pre_known_value_size_ > 0) {
+          thread_local std::vector<float> zero;
+          size_t elem = pre_known_value_size_ / sizeof(float);
+          if (zero.size() != elem) {
+            zero.assign(elem, 0.0f);
+          }
+          values->emplace_back(zero.data(), zero.size());
+        } else {
+          values->emplace_back(nullptr, 0);
+        }
+        FB_LOG_EVERY_MS(WARNING, 5000)
+            << "BatchGet missing key " << key;
+        continue;
+      }
       values->emplace_back((float *)read_data.data,
                            read_data.size / sizeof(float));
     }

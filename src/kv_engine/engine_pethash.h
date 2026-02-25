@@ -12,11 +12,18 @@ class KVEnginePetKV : public BaseKV {
   explicit KVEnginePetKV(const BaseKVConfig &config) : BaseKV(config) {
     std::string shm_path = config.path;
     const int shard_num = 16;
+    int64_t value_pool_bytes =
+        static_cast<int64_t>(config.value_size) * config.capacity / shard_num;
+    // Add headroom for chunk/bitmap metadata so full keyspace warmup fits.
+    // Small keyspaces have higher overhead; give them extra slack.
+    double headroom = 1.05;
+    if (config.capacity < 10 * 1024 * 1024LL) {
+      headroom = 1.20;
+    }
+    value_pool_bytes = static_cast<int64_t>(value_pool_bytes * headroom);
     shm_kv = std::make_unique<base::PetMultiKV>(
-        shm_path + "/shm", shard_num,
-        config.value_size * config.capacity / shard_num,
-        // config.capacity / shard_num, config.value_size));
-        config.capacity / shard_num, 0);
+        shm_path + "/shm", shard_num, value_pool_bytes,
+        config.capacity / shard_num, config.value_size);
   }
 
   void Get(const uint64_t key, std::string &value, unsigned t) override {

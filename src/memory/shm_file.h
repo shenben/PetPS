@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <atomic>
+#include <cstdlib>
 #include <deque>
 #include <fstream>
 #include <queue>
@@ -118,13 +119,16 @@ class PMMmapRegisterCenter {
     // LOG(INFO) << fmt::format("PM mmap register {}, size={}", name, size);
     auto new_size = (size + align - 1) / align * align;
     auto ret = shmfile_mmap_addr_.fetch_add(new_size);
-    LOG(ERROR) << "xmh "
-               << (shmfile_mmap_addr_ - shmfile_mmap_addr_start_) /
-                      (1024 * 1024 * 1024LL);
+    LOG(INFO) << "xmh "
+              << (shmfile_mmap_addr_ - shmfile_mmap_addr_start_) /
+                     (1024 * 1024 * 1024LL);
     CHECK_GE((uint64_t)ret, shmfile_mmap_data_addr_start_);
     CHECK_LT((uint64_t)ret + size,
              shmfile_mmap_data_addr_start_ + dax_mm_size_);
-    memset((void *)ret, 0, size);
+    const char *skip_memset = std::getenv("PETPS_DRAM_SKIP_MEMSET");
+    if (!(GetConfig().use_dram && skip_memset && *skip_memset)) {
+      memset((void *)ret, 0, size);
+    }
 
     // persist meta data
     auto &item = metaBlock_->mmMeta_[metaBlock_->mmMetaNr_];
@@ -153,15 +157,31 @@ class PMMmapRegisterCenter {
 
     char *data;
     if (GetConfig().use_dram) {
+      const char *env_gb = std::getenv("PETPS_DRAM_MMAP_GB");
+      if (env_gb && *env_gb) {
+        long gb = std::strtol(env_gb, nullptr, 10);
+        if (gb > 0) {
+          dax_mm_size_ = static_cast<int64_t>(gb) * 1024 * 1024 * 1024LL;
+        }
+      }
+    }
+    if (GetConfig().use_dram) {
       // filename_ = folly::sformat("/dev/shm/big_file{}", GetConfig().numa_id);
       fd_ = 0;
       LOG(WARNING) << "use dram mmap for PMMmapRegisterCenter";
+      int mmap_flags = MAP_PRIVATE | MAP_ANONYMOUS;
+      const char *skip_populate = std::getenv("PETPS_DRAM_SKIP_POPULATE");
+      if (!(skip_populate && *skip_populate)) {
+        mmap_flags |= MAP_POPULATE;
+      }
       data = reinterpret_cast<char *>(
-          mmap(nullptr, dax_mm_size_, PROT_READ | PROT_WRITE,
-               MAP_PRIVATE | MAP_POPULATE | MAP_ANONYMOUS, -1, 0));
+          mmap(nullptr, dax_mm_size_, PROT_READ | PROT_WRITE, mmap_flags, -1, 0));
       metaBlock_ = (MetaBlock *)data;
       CHECK_NE(data, MAP_FAILED) << "map failed";
-      mlock(data, dax_mm_size_);
+      const char *skip_mlock = std::getenv("PETPS_DRAM_SKIP_MLOCK");
+      if (!(GetConfig().use_dram && skip_mlock && *skip_mlock)) {
+        mlock(data, dax_mm_size_);
+      }
       ReInitialize();
     } else {
       filename_ = folly::sformat("/dev/dax{}.0", GetConfig().numa_id);
@@ -204,7 +224,7 @@ class PMMmapRegisterCenter {
 
   std::string filename_;
   // const int64_t dax_mm_size_ = 300 * 1024 * 1024 * 1024LL;
-  const int64_t dax_mm_size_ = 140 * 1024 * 1024 * 1024LL;
+  int64_t dax_mm_size_ = 160 * 1024 * 1024 * 1024LL;
   // const int64_t dax_mm_size_ = 500 * 1024 * 1024 * 1024LL;
   // const int64_t dax_mm_size_ = 75 * 1024 * 1024 * 1024LL;
   int fd_;

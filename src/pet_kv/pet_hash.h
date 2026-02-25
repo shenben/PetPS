@@ -256,7 +256,7 @@ class PetHash {
 
   bool Valid(int64_t memory_size) {
     if (capacity_ == 0 && memory_size > 0) {
-      LOG(ERROR) << "PetHash invalid. capacity_ == 0";
+      LOG(WARNING) << "PetHash not initialized yet (capacity_ == 0)";
       return false;
     }
     if (size_ > capacity_) {
@@ -296,9 +296,11 @@ class PetHash {
     if (total_num != chunk_table_total_num)
       LOG(ERROR) << fmt::format("PetHash invalid {} != {}", total_num,
                                 chunk_table_total_num);
-    if (total_num != size_)
-      LOG(ERROR) << fmt::format("PetHash invalid {} != {}", total_num, size_);
-    return total_num == chunk_table_total_num && total_num == size_;
+    auto size_snapshot = size_.load();
+    if (total_num != size_snapshot)
+      LOG(ERROR) << fmt::format("PetHash invalid {} != {}", total_num,
+                                size_snapshot);
+    return total_num == chunk_table_total_num && total_num == size_snapshot;
   }
 
   void Debug() {

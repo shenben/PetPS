@@ -2,6 +2,21 @@
 
 #include "Connection.h"
 
+namespace {
+std::string SanitizeMemcachedKey(const std::string &key) {
+  std::string out;
+  out.reserve(key.size());
+  for (unsigned char c : key) {
+    if (c > 0x20 && c < 0x7f) {
+      out.push_back(static_cast<char>(c));
+    } else {
+      out.push_back('_');
+    }
+  }
+  return out;
+}
+}  // namespace
+
 const char *DSMKeeper::OK = "OK";
 const char *DSMKeeper::ServerPrefix = "SPre";
 
@@ -47,6 +62,9 @@ bool DSMKeeper::connectNode(uint16_t remoteID) {
 }
 
 void DSMKeeper::setDataToRemote(uint16_t remoteID) {
+  if (remoteID == getMyNodeID()) {
+    return;
+  }
   for (int i = 0; i < NR_DIRECTORY; ++i) {
     auto &c = dirCon[i];
 
@@ -64,6 +82,9 @@ void DSMKeeper::setDataToRemote(uint16_t remoteID) {
 }
 
 void DSMKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMeta) {
+  if (remoteID == getMyNodeID()) {
+    return;
+  }
   for (int i = 0; i < NR_DIRECTORY; ++i) {
     auto &c = dirCon[i];
 
@@ -128,21 +149,31 @@ void DSMKeeper::connectMySelf() {
 
 void DSMKeeper::barrier(const std::string &barrierKey, uint64_t k) {
 
-  std::string key = std::string("barrier-") + barrierKey;
-  if (this->getMyNodeID() == this->getServerNR() - 1) {
-    memSet(key.c_str(), key.size(), "0", 1);
+  // Single-server deployments don't need a memcached barrier.
+  if (k <= 1) {
+    return;
+  }
+
+  std::string key = std::string("barrier-") + SanitizeMemcachedKey(barrierKey);
+  uint64_t cur = 0;
+  if (memTryGetUint(key.c_str(), key.size(), &cur)) {
+    if (cur >= k) {
+      // Stale barrier from a previous run; reset.
+      memSet(key.c_str(), key.size(), "0", 1);
+    }
   }
   memFetchAndAdd(key.c_str(), key.size());
   while (true) {
-    uint64_t v = std::stoull(memGet(key.c_str(), key.size()));
-    if (v == k) {
+    uint64_t v = 0;
+    if (memTryGetUint(key.c_str(), key.size(), &v) && v == k) {
       return;
     }
+    usleep(1000);
   }
 }
 
 uint64_t DSMKeeper::sum(const std::string &sum_key, uint64_t value) {
-  std::string key_prefix = std::string("sum-") + sum_key;
+  std::string key_prefix = std::string("sum-") + SanitizeMemcachedKey(sum_key);
 
   std::string key = key_prefix + std::to_string(this->getMyNodeID());
   memSet(key.c_str(), key.size(), (char *)&value, sizeof(value));
