@@ -71,14 +71,14 @@ def install_eachserver_key_to_master(hosts):
 
 def mount_master(hosts):
     ParallelSSH(
-        hosts, f"cd /home/xieminhui; mkdir -p petps;")
+        hosts, f"cd /home/pxg; mkdir -p petps;")
     ParallelSSH(
-        hosts, f"cd /home/xieminhui; ls petps;")
+        hosts, f"cd /home/pxg; ls petps;")
 
     ParallelSSH(
         hosts, f"fusermount -u petps;")
     ParallelSSH(
-        hosts, f"sudo mount {master}:/home/xieminhui/petps petps")
+        hosts, f"sudo mount {master}:/home/pxg/petps petps")
 
 
 def installFolly(hosts):
@@ -95,7 +95,7 @@ def installFolly(hosts):
 
     ParallelSSH(hosts, "cd folly && git checkout v2022.01.17.00 && mkdir _build")
     ParallelSSH(hosts, "rm -rf folly/_build && mkdir folly/_build")
-    ParallelSSH(hosts, "cd folly/_build && CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake .. && make -j && make DESTDIR=/home/xieminhui/folly-install install")
+    ParallelSSH(hosts, "cd folly/_build && CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake .. && make -j && make DESTDIR=/home/pxg/folly-install install")
 
 
 def installGCC9(hosts):

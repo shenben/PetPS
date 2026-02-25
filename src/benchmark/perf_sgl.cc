@@ -248,7 +248,7 @@ int main(int argc, char *argv[]) {
   if (FLAGS_actor == "server") {
     system(
         "bash "
-        "/home/xieminhui/petps/third_party/Mayfly-main/script/restartMemc.sh");
+        "/home/pxg/PetPS/third_party/Mayfly-main/script/restartMemc.sh");
     Server server(FLAGS_thread_num);
     server.Main();
   } else if (FLAGS_actor == "client") {

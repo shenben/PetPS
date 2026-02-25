@@ -75,7 +75,7 @@ mkdir _build && \
 cd _build && \ 
 CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake .. && \ 
 make -j && \ 
-make DESTDIR=/home/xieminhui/folly-install install
+make DESTDIR=/home/pxg/folly-install install
 
 # PB
 RUN apt-get update -y && \ 
@@ -253,4 +253,3 @@ RUN cp /usr/bin/gcc-11 /usr/bin/gcc
 RUN cp /usr/bin/g++-11 /usr/bin/g++
 
 # RUN source /opt/intel/oneapi/setvars.sh
-

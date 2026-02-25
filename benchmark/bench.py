@@ -13,7 +13,7 @@ from zmq import SERVER
 import concurrent.futures
 
 
-PROJECT_PATH = "/home/xieminhui/petps"
+PROJECT_PATH = "/home/pxg/PetPS"
 LOG_PREFIX = f'{PROJECT_PATH}/benchmark/log'
 
 #  sudo service  memcached stop
